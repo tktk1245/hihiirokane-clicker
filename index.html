@@ -767,7 +767,7 @@ function rewardFor(stage){
   return r.floor();
 }
 function costOf(kind,id,level,tier){
-  if(kind==="upgrade"){const u=UPG_BY_ID[id];if(!u)return Infinity;if(u.max!=null&&level>=u.max)return Infinity;if(level<0)return Infinity;return Math.floor(u.baseCost*Math.pow(u.growth,level));}
+  if(kind==="upgrade"){const u=UPG_BY_ID[id];if(!u)return Infinity;if(u.max!=null&&level>=u.max)return Infinity;if(level<0)return Infinity;return Bg(u.baseCost).mul(powB(u.growth,level)).floor();}  // Big: 上限なし強化はlevelで指数増 → Math.powのfloat上限(∞化)を回避
   // 仲間レベル: 段位内2次コスト(線形DPS×2次コストで連打は必ず失速)。L>=LCAP は Infinity(=長押し停止/クラスチェンジ待ち)
   const g=GIRL_BY_ID[id]; if(!g)return Infinity;
   if(level<0||level>=LCAP) return Infinity;
@@ -1188,17 +1188,19 @@ function doClassChange(id){ const st=state.girls[id]; if(!st||!st.owned) return 
 }
 // 安い順にまとめて強化: 所持ヒヒで買えるもの(強化Lv/仲間Lv/加入/クラスチェンジ)を最安から自動購入。副作用は最後に一括。
 function buyAllCheapest(){
-  let bought=0, spent=0, guard=0;
+  let bought=0, spent=BIG0, guard=0;   // コストはBig/Number混在 → 全てBigで比較・集計
   while(guard++<200000){
-    let bc=Infinity, bk=null, bid=null;
+    let bc=null, bk=null, bid=null;   // bc: 買える中で最安のコスト(Big)
+    const bal=Bg(state.hihiirokane);
+    const consider=(cost,kind,id)=>{ const cB=Bg(cost); if(bal.gte(cB) && (bc===null||cB.lt(bc))){ bc=cB; bk=kind; bid=id; } };
     for(const u of UPGRADES){ const lv=state.upgrades[u.id]||0; if(u.max!=null&&lv>=u.max) continue;
-      const c=costOf("upgrade",u.id,lv); if(c<bc&&Bg(state.hihiirokane).gte(c)){bc=c;bk="upg";bid=u.id;} }
+      consider(costOf("upgrade",u.id,lv),"upg",u.id); }
     for(let i=0;i<GIRLS.length;i++){ const g=GIRLS[i], st=state.girls[g.id];
-      if(!st||!st.owned){ if(state.stage.highest>=RECRUIT_STAGE[i]&&g.recruit<bc&&Bg(state.hihiirokane).gte(g.recruit)){bc=g.recruit;bk="recruit";bid=g.id;} }
-      else if(st.level<LCAP){ const c=costOf("girl",g.id,st.level,st.tier); if(c<bc&&Bg(state.hihiirokane).gte(c)){bc=c;bk="glv";bid=g.id;} }
-      else if(canClassChange(g.id)){ const c=classChangeCost(g.id); if(c<bc&&Bg(state.hihiirokane).gte(c)){bc=c;bk="cc";bid=g.id;} } }
+      if(!st||!st.owned){ if(state.stage.highest>=RECRUIT_STAGE[i]) consider(g.recruit,"recruit",g.id); }
+      else if(st.level<LCAP){ consider(costOf("girl",g.id,st.level,st.tier),"glv",g.id); }
+      else if(canClassChange(g.id)){ consider(classChangeCost(g.id),"cc",g.id); } }
     if(!bk) break;
-    state.hihiirokane=Bg(state.hihiirokane).sub(bc); spent+=bc;
+    state.hihiirokane=Bg(state.hihiirokane).sub(bc); spent=spent.add(bc);
     if(bk==="upg") state.upgrades[bid]=(state.upgrades[bid]||0)+1;
     else if(bk==="recruit") state.girls[bid]={owned:true,level:1,tier:0};
     else if(bk==="glv") state.girls[bid].level++;
@@ -1917,7 +1919,7 @@ function renderPanel(force){
 function gemMini(){return `<svg class="gem" viewBox="0 0 24 24"><polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="#FFD98A" stroke="#F25C7A" stroke-width="1.6"/></svg>`;}
 function renderGirls(p){
   let html=`<div class="panelHead">🌸 仲間たち — 自動でバハムートと戦ってくれるよ</div>`;
-  html+=`<button class="buyAllBtn" data-action="buyall">💰 安い順にまとめて強化（仲間も）</button>`;
+  if(state.prestige.cores>=5) html+=`<button class="buyAllBtn" data-action="buyall">💰 安い順にまとめて強化（仲間も）</button>`;  // 竜核5個以上で解放(終盤のQoL)
   // 主人公(あなた)カード: 1タップのダメージを表示
   { const cr=getCrit();
     html+=`<div class="card">
@@ -1991,7 +1993,7 @@ function renderGirls(p){
 }
 function renderUpgrades(p){
   let html=`<div class="panelHead">⚔️ 強化ショップ — ヒヒイロカネで強くなろう</div>`;
-  html+=`<button class="buyAllBtn" data-action="buyall">💰 安い順にまとめて強化（仲間も）</button>`;
+  if(state.prestige.cores>=5) html+=`<button class="buyAllBtn" data-action="buyall">💰 安い順にまとめて強化（仲間も）</button>`;  // 竜核5個以上で解放(終盤のQoL)
   UPGRADES.forEach(u=>{
     const lv=state.upgrades[u.id]||0;
     const maxed=u.max!=null&&lv>=u.max;
