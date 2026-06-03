@@ -574,6 +574,7 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 const SAVE_KEY="hihiiro_clicker_save_v1";
 const SAVE_KEY_BACKUP="hihiiro_clicker_save_v1_bak";
 const VERSION=7;
+const BUILD="4cf27badb170";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
 const AUTOSAVE_MS=10000;
 const SAVE_MIN_GAP_MS=2000;
 const TICK_MS=100;
@@ -668,7 +669,7 @@ function newState(){
     prestige:{cores:0, lifeEarned:0, count:0},
     super:{charge:0, max:30}, // 必殺ゲージ(タップ30回で満タン)
     settings:{sound:true, bgm:true, motion:true, motionUserSet:false, haptics:true, damageNumbers:true},
-    stats:{totalTaps:0, totalCrits:0, bahamutDefeated:0, playTimeMs:0, recentKills:[]},
+    stats:{totalTaps:0, totalCrits:0, bahamutDefeated:0, playTimeMs:0, recentKills:[], bestStage:1},   // bestStage=通算最高到達(転生で保持)
     onboard:{tapDone:false, shopHinted:false, recruitHinted:false, idleHinted:false, done:false},
   };
 }
@@ -853,6 +854,9 @@ function migrate(raw){
   raw.super.charge=clamp(Math.floor(sanitizeNum(raw.super.charge,0)),0,raw.super.max);
   raw.stage.index=Math.max(1,Math.floor(sanitizeNum(raw.stage.index,1)));
   raw.stage.highest=Math.max(raw.stage.index,Math.floor(sanitizeNum(raw.stage.highest,1)));
+  // 通算最高到達: 旧セーブは現在の到達最高で初期化(以後は転生で保持)
+  if(!raw.stats||typeof raw.stats!=="object") raw.stats={};
+  raw.stats.bestStage=Math.max(Math.floor(sanitizeNum(raw.stats.bestStage,1)), raw.stage.highest);
   raw.lastSeen=sanitizeNum(raw.lastSeen,nowMs());
   raw.version=VERSION;
   return raw;
@@ -1224,6 +1228,7 @@ function doPrestige(){
   const keepSettings=state.settings;
   const keepOnboard=state.onboard;
   const keepStats=state.stats;        // プレイ時間・総タップ・累計撃破・討伐履歴は通算で引き継ぐ(転生でリセットしない)
+  keepStats.bestStage=Math.max(keepStats.bestStage||0, state.stage.highest);   // 今回ランの到達を通算最高へ確定(転生後も記録に残す)
   const cnt=state.prestige.count+1;
   state=newState();
   state.settings=keepSettings;
@@ -2030,8 +2035,14 @@ function renderPrestige(p){
       <div class="cardDesc">ステージ・仲間・強化・ヒヒイロカネはすべて初期化されるけど、2周目は一気に駆け抜けられるよ。</div>
       <button class="buyBtn" data-action="prestige" style="min-width:0;padding:12px">竜核を捧げて転生する</button>
     </div>`;
-  } else {
+  } else if(state.stage.highest<50){
     html+=`<div class="card"><div class="cardBody"><div class="cardTitle">🔒 ステージ50で解放</div><div class="cardDesc">あと ${Math.max(0,50-state.stage.highest)} ステージ！もっと先へ進もう。</div></div></div>`;
+  } else {
+    // ステージ50到達済みだが、今転生しても竜核が増えない＝生涯獲得ヒヒ(累積)が次のコアの桁に届いていない
+    const life=prestigeLifeIfNow();
+    const target=powB(10, PRES_LOG0 + (state.prestige.cores||0) + 1);   // 次のコアに必要な生涯獲得ヒヒ = 10^(PRES_LOG0+cores+1)
+    html+=`<div class="card"><div class="cardBody"><div class="cardTitle">🔒 もう少しで転生できるよ！</div>`
+        + `<div class="cardDesc">生涯獲得ヒヒが <b>${formatNumber(target)}</b> に届くと 竜核 +1 で転生解放！<br>いまの生涯獲得: ${formatNumber(life)}（ステージを進めてもっと稼ごう）</div></div></div>`;
   }
   p.innerHTML=html;
 }
@@ -2058,13 +2069,13 @@ function renderRecords(p){
   const cell=(k,v)=>`<div class="recCell"><div class="k">${k}</div><div class="v">${v}</div></div>`;
   let html=`<div class="panelHead">📜 記録 — 冒険のあゆみ</div>`;
   html+=`<div class="recGrid">`
-      + cell("到達ステージ", "STAGE "+formatNumber(state.stage.highest))
+      + cell("最高到達(通算)", "STAGE "+formatNumber(Math.max(st.bestStage||0, state.stage.highest)))
       + cell("現在ステージ", "STAGE "+formatNumber(state.stage.index))
       + cell("累計撃破", formatNumber(st.bahamutDefeated)+" 体")
       + cell("総タップ", formatNumber(st.totalTaps)+" 回")
       + cell("会心", formatNumber(st.totalCrits)+" 回 ("+critRate+"%)")
       + cell("プレイ時間", fmtDuration(st.playTimeMs))
-      + cell("総獲得", formatNumber(state.totalEarned))
+      + cell("総獲得(通算)", formatNumber(prestigeLifeIfNow()))
       + cell("転生", state.prestige.count+" 回 ×"+formatNumber(prestigeMult()))
       + `</div>`;
   const kills=st.recentKills||[];
@@ -2608,8 +2619,34 @@ function init(){
   if(!Bg(res.goldGained).isZero()){ setTimeout(()=>showOfflineModal(res),400); }
   // オンボーディング(初回)
   if(!state.onboard.done){ setTimeout(startOnboard,500); }
+  // 公開版の更新検知(キャッシュ対策): 起動時＋復帰時にチェック
+  checkForUpdate();
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkForUpdate(); });
+  window.addEventListener("focus",checkForUpdate);
   // デバッグ用
   window.__game={state,D,save,recomputeDerived,doPrestige};
+}
+// 公開時に publish.ps1 が BUILD をスタンプし version.txt も同値で出力する。実行中のBUILDと
+// 最新 version.txt が食い違えば古いキャッシュ → 保存してから一度だけ自動リロードして最新版へ。
+let _updChecking=false;
+function checkForUpdate(){
+  if(BUILD==="dev" || _updChecking) return;   // ローカル開発・多重実行はスキップ
+  _updChecking=true;
+  fetch("version.txt?_="+nowMs(), {cache:"no-store"})
+    .then(r=> r.ok ? r.text() : null)
+    .then(v=>{
+      _updChecking=false;
+      if(!v) return;
+      v=v.trim();
+      if(!v || v===BUILD) return;
+      let last=null; try{ last=sessionStorage.getItem("hhk_upd"); }catch(e){}
+      if(last===v) return;   // 同じ新版へ再リロードしない(無限ループ防止)
+      try{ sessionStorage.setItem("hhk_upd", v); }catch(e){}
+      try{ save("force"); }catch(e){}
+      try{ toast("新しいバージョンに更新するよ✨",{ms:1200}); }catch(e){}
+      setTimeout(()=>location.reload(), 350);
+    })
+    .catch(()=>{ _updChecking=false; });
 }
 // ロード済みstateのHPを尊重しつつmaxHpを式から再導出
 function setupStage_keepHp(){
