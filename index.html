@@ -569,7 +569,7 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 const SAVE_KEY="hihiiro_clicker_save_v1";
 const SAVE_KEY_BACKUP="hihiiro_clicker_save_v1_bak";
 const VERSION=7;
-const BUILD="633e27b03bcd";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
+const BUILD="874a4f5090a1";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
 const AUTOSAVE_MS=10000;
 const SAVE_MIN_GAP_MS=2000;
 const TICK_MS=100;
@@ -883,7 +883,7 @@ function applyOfflineProgress(now){
   if(dps.isZero()) return {elapsedMs:elapsed,goldGained:BIG0,kills:0,stagesGained:0};
   // 経過時間ぶんの総ダメージを、各ステージの実HPを順次差し引きながら討伐ループで消費。
   let remainingDmg=dps.mul(elapsed/1000);   // Big
-  let kills=0, gold=BIG0, stagesGained=0;
+  let kills=0, gold=BIG0, credit=BIG0, stagesGained=0;   // gold=所持(常時) / credit=総獲得(新規ゾーンのみ)
   const startStage=state.stage.index;
   let curHp=state.bahamut.hp; // 進行中ボスの残HPから充当
   if(!(curHp instanceof Big)||curHp.isZero()) curHp=bahamutHp(state.stage.index);
@@ -893,7 +893,9 @@ function applyOfflineProgress(now){
     if(remainingDmg.lt(curHp)){ state.bahamut.hp=curHp.sub(remainingDmg); remainingDmg=BIG0; break; }
     remainingDmg=remainingDmg.sub(curHp);
     kills++;
-    gold=gold.add(rewardFor(state.stage.index));
+    const s=state.stage.index; const rw=rewardFor(s);
+    gold=gold.add(rw);
+    if(s>(state.stats.bestStage||0)){ credit=credit.add(rw); state.stats.bestStage=s; }   // 新規ゾーンのみコアの元に加算
     state.stage.index++;
     stagesGained++;
     if(state.stage.index>state.stage.highest) state.stage.highest=state.stage.index;
@@ -902,10 +904,8 @@ function applyOfflineProgress(now){
   }
   // maxHp/tier/HP整合を再導出(stage.index更新後)
   setupStage_keepHp();
-  if(!gold.isZero()){
-    state.hihiirokane=Bg(state.hihiirokane).add(gold);
-    state.totalEarned=Bg(state.totalEarned).add(gold);
-  }
+  if(!gold.isZero()) state.hihiirokane=Bg(state.hihiirokane).add(gold);
+  if(!credit.isZero()) state.totalEarned=Bg(state.totalEarned).add(credit);
   if(stagesGained>0) recomputeDerived(); // 報酬式(goldGain/prestige連動)・DPS再計算
   if(gold>0||stagesGained>0){ D.dirtyHUD=true; D.dirtyPanel=true; D.saveDirty=true; }
   return {elapsedMs:elapsed,goldGained:gold,kills:kills,stagesGained:stagesGained,startStage:startStage};
@@ -995,8 +995,11 @@ function onBahamutDefeated(){
   _defeating=true;
   const s=state.stage.index;
   const reward=rewardFor(s);   // Big
-  state.hihiirokane=Bg(state.hihiirokane).add(reward);
-  state.totalEarned=Bg(state.totalEarned).add(reward);
+  state.hihiirokane=Bg(state.hihiirokane).add(reward);          // 所持ヒヒ(使える金)は常に付与
+  if(s>(state.stats.bestStage||0)){                             // 過去最高stage超え=新規ゾーンのみ総獲得(コアの元)に加算。既踏破の再取得ではコアが増えない(再到達→転生でのコア膨張対策)
+    state.totalEarned=Bg(state.totalEarned).add(reward);
+    state.stats.bestStage=s;
+  }
   state.stats.bahamutDefeated++;
   state.stage.killsThisStage++;
   const wasBoss=state.bahamut.isBoss;
@@ -1035,7 +1038,7 @@ function onBahamutDefeated(){
   D.dirtyHUD=true; D.dirtyPanel=true; D.saveDirty=true;
   // 撃破→次個体スポーン演出 + 名乗りカットイン(新ボスのリスポーン時点に同期して表示)
   if(fx) playBossRespawn(prevTier!==state.bahamut.tier);
-  else if(prevTier!==state.bahamut.tier || _renderedTier!==state.bahamut.tier) renderBahamutSvg();
+  else if(prevTier!==state.bahamut.tier || _renderedTier!==state.bahamut.tier) D.dirtyBoss=true;   // バースト中はSVG再生成を遅延(描画ループで1フレーム1回)。多重撃破での連続再生成=フリーズを防止
   // 同期処理完了。次のキル判定を解禁(高DPSでも即次へ進める)
   _defeating=false;
 }
@@ -1187,13 +1190,16 @@ function doClassChange(id){ const st=state.girls[id]; if(!st||!st.owned) return 
 }
 // 安い順にまとめて強化: 所持ヒヒで買えるもの(強化Lv/仲間Lv/加入/クラスチェンジ)を最安から自動購入。副作用は最後に一括。
 function buyAllCheapest(){
-  let bought=0, spent=BIG0, guard=0;   // コストはBig/Number混在 → 全てBigで比較・集計
-  while(guard++<200000){
-    let bc=null, bk=null, bid=null;   // bc: 買える中で最安のコスト(Big)
-    const bal=Bg(state.hihiirokane);
+  // 個別ループだと深層で数十万〜数百万回=フリーズするため、上限なし強化(等比)は解析的に一括計算する。
+  let bought=0, spent=BIG0;
+  const UNB=[], BND=[];                               // UNB:上限なし(等比) / BND:上限つき(critChance/autoClick)
+  for(const u of UPGRADES){ (u.max==null?UNB:BND).push(u); }
+  // --- Phase A: 仲間系 + 上限つき強化 を最安から正確に(いずれも有界=コスト小・回数少) ---
+  let guard=0;
+  while(guard++<3000){
+    let bc=null, bk=null, bid=null; const bal=Bg(state.hihiirokane);
     const consider=(cost,kind,id)=>{ const cB=Bg(cost); if(bal.gte(cB) && (bc===null||cB.lt(bc))){ bc=cB; bk=kind; bid=id; } };
-    for(const u of UPGRADES){ const lv=state.upgrades[u.id]||0; if(u.max!=null&&lv>=u.max) continue;
-      consider(costOf("upgrade",u.id,lv),"upg",u.id); }
+    for(const u of BND){ const lv=state.upgrades[u.id]||0; if(lv<u.max) consider(costOf("upgrade",u.id,lv),"upg",u.id); }
     for(let i=0;i<GIRLS.length;i++){ const g=GIRLS[i], st=state.girls[g.id];
       if(!st||!st.owned){ if(state.stage.highest>=RECRUIT_STAGE[i]) consider(g.recruit,"recruit",g.id); }
       else if(st.level<LCAP){ consider(costOf("girl",g.id,st.level,st.tier),"glv",g.id); }
@@ -1206,9 +1212,34 @@ function buyAllCheapest(){
     else { const st=state.girls[bid]; st.tier++; st.level=1; }
     bought++;
   }
-  if(bought>0){ recomputeDerived(); D.saveDirty=true; D.dirtyHUD=true; D.dirtyPanel=true; blip(760,0.08);
-    toast(`安い順にまとめて強化：${formatNumber(bought)}件 / ${formatNumber(spent)} 消費✨`,{ms:2400}); }
-  else toast("いま買えるものがないよ",{type:"info"});
+  // --- Phase B: 上限なし強化は閾値Tの二分探索で一括(個別購入ループ不要)。コスト≤Tの全レベルを買う=最安から、と等価 ---
+  // cost(ℓ)=base*g^ℓ。閾値t=log10(T)。各強化: 新Lv N=floor((t-log10(base))/log10(g))。
+  // 区間[L,N]の累積コスト = base*(g^(N+1)-g^L)/(g-1) (未floor=厳密floor和の上界 → 予算超えなし)。
+  if(UNB.length){
+    const budget=Bg(state.hihiirokane);
+    if(!budget.isZero()){
+      const totalAt=(t)=>{ let tot=BIG0;
+        for(const u of UNB){ const L=state.upgrades[u.id]||0; const lg=Math.log10(u.growth), lb=Math.log10(u.baseCost);
+          const N=Math.floor((t-lb)/lg); if(N<L) continue;
+          tot=tot.add(powB(u.growth,N+1).sub(powB(u.growth,L)).mul(u.baseCost/(u.growth-1))); }
+        return tot; };
+      let lo=0, hi=Math.max(1,budget.log10())+5; let g2=0;
+      while(totalAt(hi).lte(budget) && g2++<50) hi*=2;          // hiが予算超になるまで拡張(保険)
+      for(let it=0; it<64; it++){ const mid=(lo+hi)/2; if(totalAt(mid).lte(budget)) lo=mid; else hi=mid; }
+      const t=lo;
+      for(const u of UNB){ const L=state.upgrades[u.id]||0; const lg=Math.log10(u.growth), lb=Math.log10(u.baseCost);
+        const N=Math.floor((t-lb)/lg); const cnt=N-L+1; if(cnt<=0) continue;
+        const cost=powB(u.growth,N+1).sub(powB(u.growth,L)).mul(u.baseCost/(u.growth-1)).floor();
+        if(Bg(state.hihiirokane).lt(cost)) continue;            // 安全(概算が予算超なら見送り)
+        state.upgrades[u.id]=N+1; bought+=cnt; spent=spent.add(cost);
+        state.hihiirokane=Bg(state.hihiirokane).sub(cost); }
+    }
+  }
+  if(bought>0){ recomputeDerived(); D.saveDirty=true; D.dirtyHUD=true; D.dirtyPanel=true;
+    if(!_rapidHold) blip(760,0.08);   // SEは単発時のみ
+    // 成功トースト: 単発タップは即時、長押し連打中は約0.7秒ごとに間引き表示(連続表示は防ぎつつ「強化した」感は残す)
+    if(!_rapidHold || nowMs()-(D._baToastAt||0)>700){ D._baToastAt=nowMs(); toast(`安い順にまとめて強化：${formatNumber(bought)}件 / ${formatNumber(spent)} 消費✨`,{ms:_rapidHold?1200:2400}); } }
+  else if(!_rapidHold) toast("いま買えるものがないよ",{type:"info"});   // 買えるもの無しは単発のみ(連打中の連発を防止)
   return bought;
 }
 // 転生: コア=生涯獲得ヒヒの桁数(log10-PRES_LOG0)。今転生したら増えるコア数を返す。
@@ -1908,6 +1939,9 @@ function fireSuper(){
 let currentTab="girls";
 function renderPanel(force){
   if(!D.dirtyPanel&&!force) return;
+  // 設定タブはフォーム要素(エクスポート/インポートのtextarea)を含むため、オート討伐由来の自動再描画では作り直さない
+  // (毎フレーム再生成するとフォーカス/入力中の文字が消える)。タブ切替・トグル等の強制時のみ再描画。
+  if(currentTab==="settings" && !force){ D.dirtyPanel=false; return; }
   D.dirtyPanel=false;
   const p=dom.panel;
   if(currentTab==="girls") renderGirls(p);
@@ -2114,23 +2148,27 @@ function renderRecords(p){
    B6  LOOP
    ===================================================================== */
 function gameTick(){
+  if(D._noTick) return;   // インポート直後〜リロードまでは進行を止める(進行中の前進が新stateに適用されるのを防ぐ)
   const t=nowMs();
   let dt=(t-D.lastTickAt)/1000;
   D.lastTickAt=t;
   if(!Number.isFinite(dt)||dt<0) dt=TICK_MS/1000;
   if(dt>1.5) dt=1.5; // 大きなギャップは上限(バックグラウンド復帰など)
   state.stats.playTimeMs+=dt*1000;
-  // DPS適用: 仲間の攻撃を「定周期の通常/会心ヒット」として実際にHPへ適用。
-  // 表示=実際に減ったHP、会心は本物(HPが大きく減る)、平均は実DPS不変(owed/cf を base、平均 base*cf=owed)。
+  // DPS適用: 仲間の攻撃を定周期で実HPへ適用。HPへは平均DPS(owed)をそのまま入れる。
+  // (会心は computeDPS の critFactor に既に内包済み。ここで通常/会心に割ると高critDamage建てで
+  //  通常ヒットが owed/cf まで小さくなり、巨大HPに対し桁落ち=ほぼ無反応・表示も小桁で「減らない」ように見える)
+  // 会心は表示の彩り(色/ラベル)だけに用い、与ダメージ量は owed 一定=滑らかに減る。
   const dps=Bg(D.dps);
   if(!dps.isZero()){
     D._autoAcc=Bg(D._autoAcc||0).add(dps.mul(dt));        // この周期で与える平均ダメージを蓄積(Big)
     if(t-(D._autoAt||0)>=AUTO_DMG_MS && !D._autoAcc.isZero()){
       const owed=D._autoAcc; D._autoAcc=BIG0; D._autoAt=t;
-      const cr=getCrit(); const cf=1+cr.chance*(cr.mult-1); const isCrit=Math.random()<cr.chance;
-      let dmg=isCrit ? owed.div(cf).mul(cr.mult) : owed.div(cf);    // 通常 or 会心の実ダメージ(Big)
+      const cr=getCrit(); const isCrit=Math.random()<cr.chance;
+      let dmg=owed;    // 実ダメージ=平均DPS(owed)。会心でも量は変えず(彩りのみ)
       if(state.settings.damageNumbers) spawnDamageNumber(dmg,null,null,isCrit,true);     // auto=true: 非会心=小シアン / 会心=控えめゴールド「会心」
       if(state.settings.motion) spawnHitSpark(null,null,false);                          // 粒子は通常量(タップ会心より控えめ)
+      // 1tickのキル上限は400固定。転生後の既踏破ゾーンの登り直しも通常の撃破ループで段階的に進む(ワープ無し)
       let kills=0; const MAXK=400;
       while(!dmg.isZero() && kills<MAXK){
         const hp=state.bahamut.hp;
@@ -2160,6 +2198,8 @@ function renderLoop(ts){
   _prevTs=ts; _lastRenderTs=ts;
   // HUD
   if(D.dirtyHUD){ renderHUD(); renderSuper(); D.dirtyHUD=false; }
+  // バースト撃破で溜まったボスSVG再生成は1フレーム1回だけ(多重撃破時のフリーズ防止)
+  if(D.dirtyBoss){ renderBahamutSvg(); D.dirtyBoss=false; }
   // 記録タブは表示中、約4Hzでプレイ時間などを即時更新
   if(currentTab==="records"){ _recAcc+=dt; if(_recAcc>=0.25){ _recAcc=0; D.dirtyPanel=true; } }
   // パネル
@@ -2322,13 +2362,14 @@ function holdStart(ev){
   let el=ev.target;
   while(el&&el!==dom.panel&&!el.dataset.action) el=el.parentElement;
   if(!el||!el.dataset.action) return;
-  const a=el.dataset.action; if(a!=="buyupg"&&a!=="levelup") return;
+  const a=el.dataset.action; if(a!=="buyupg"&&a!=="levelup"&&a!=="buyall") return;
   const id=el.dataset.id;
   holdStop(); _holdCombo=0; unlockAudio();
   const px=(ev.clientX!=null?ev.clientX:window.innerWidth/2), py=(ev.clientY!=null?ev.clientY:window.innerHeight/2);
-  const buy=()=> (a==="buyupg") ? buyUpgrade(id) : levelUpGirl(id,1);
+  const buy=(a==="buyall") ? (()=>{ const n=buyAllCheapest(); if(n>0) renderParty(); return n>0; })   // まとめて強化も長押し連続実行
+                           : (()=> (a==="buyupg") ? buyUpgrade(id) : levelUpGirl(id,1));
   if(buy()===false) return;                  // 1回目から買えない(資金/最大)なら長押し開始しない
-  holdRingShow(px,py);                        // 発動ディレイのサークルタイマー(1秒)
+  holdRingShow(px,py, a==="buyall"?"長押しでまとめ買い":undefined);   // 発動ディレイのサークルタイマー(1秒)
   _holdInitTimer=setTimeout(()=>{
     _holdInitTimer=null;
     if(_holdRingEl){ const r=_holdRingEl; _holdRingEl=null; r.classList.add("burst"); setTimeout(()=>{ if(r.parentNode) r.parentNode.removeChild(r); },220); }
@@ -2357,7 +2398,7 @@ function holdStart(ev){
       }
       _holdStarved=false;
       _holdCombo++;
-      holdFx(px,py,"×"+_holdCombo+" 連打中！");
+      holdFx(px,py,"×"+_holdCombo+(a==="buyall"?" まとめ買い！":" 連打中！"));
       if(_holdCombo%5===0) blip(720,0.04);          // 連打音は間引き(耳ざわり防止)
       if(state.settings.haptics && navigator.vibrate){ try{navigator.vibrate(5);}catch(e){} }
     };
@@ -2373,7 +2414,7 @@ function onPanelClick(ev){
   unlockAudio();
   // 強化/レベルアップのポインタ由来clickはpointerdownの長押し系(holdStart)で処理済み → 二重防止。
   // キーボード操作(ev.detail===0)はここで1回実行してa11yを担保。
-  if((a==="buyupg"||a==="levelup") && ev.detail>0) return;
+  if((a==="buyupg"||a==="levelup"||a==="buyall") && ev.detail>0) return;
   if(a==="buyupg"){ buyUpgrade(id); }
   else if(a==="recruit"){ recruitGirl(id); renderParty(); }
   else if(a==="levelup"){ levelUpGirl(id,1); }
@@ -2545,6 +2586,8 @@ function applyImport(raw){
     try{ const cur=localStorage.getItem(SAVE_KEY); if(cur) localStorage.setItem(SAVE_KEY_BACKUP,cur); }catch(e){}  // 直前データを退避
     state=migrated;                       // in-memory も差し替え(離脱時保存での巻き戻り防止)
     setupStage_keepHp(); recomputeDerived();
+    // リロードまで gameTick を停止し、進行中のオートDPSが新stateに適用される(=離脱時保存で前進状態が保存される)のを防ぐ
+    D._noTick=true; D._autoAcc=BIG0; D._autoAt=nowMs();
     state.lastSeen=nowMs();
     localStorage.setItem(SAVE_KEY, safeJSON.stringify(state));
     return true;
