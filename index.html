@@ -64,9 +64,8 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 
 /* 背景きらめき */
 #bgStars{position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden;}
-.bgstar{position:absolute;animation:twinkle 3s ease-in-out infinite, drift 18s linear infinite;}
-@keyframes twinkle{0%,100%{opacity:.2;transform:scale(.6);}50%{opacity:1;transform:scale(1);}}
-@keyframes drift{from{transform:translateY(0);}to{transform:translateY(-10px);}}
+.bgstar{position:absolute;animation:twinkle 4s ease-in-out infinite;}
+@keyframes twinkle{0%,100%{opacity:.25;transform:scale(.65);}50%{opacity:.95;transform:scale(1);}}
 
 /* ============================================================
    HUD
@@ -79,11 +78,9 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
   position:relative;z-index:5;
   margin:8px 8px 4px;
   padding:8px 12px;
-  background:var(--panel-bg);
+  background:rgba(255,255,255,.9);
   border:2px solid var(--pink);
   border-radius:var(--radius);
-  backdrop-filter:blur(8px);
-  -webkit-backdrop-filter:blur(8px);
   box-shadow:var(--shadow);
 }
 #hudTop{display:flex;align-items:center;gap:8px;}
@@ -100,9 +97,8 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 .hhkRow{display:flex;align-items:center;gap:5px;font-weight:800;font-size:18px;}
 .hhkRow .gem{width:18px;height:18px;flex:none;}
 .hhkRow .val{
-  background:var(--gold-grad);background-size:200% 100%;
+  background:var(--gold-grad);background-size:100% 100%;
   -webkit-background-clip:text;background-clip:text;color:transparent;
-  animation:shimmer 2.6s linear infinite;
 }
 .dpsRow{font-size:11px;font-weight:700;color:var(--ink-soft);}
 #soundBtn{
@@ -330,8 +326,7 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 #tabs{
   position:relative;z-index:5;
   display:flex;gap:6px;margin:4px 8px 0;padding:5px;
-  background:var(--panel-bg);border:2px solid var(--pink);border-radius:var(--radius);
-  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  background:rgba(255,255,255,.9);border:2px solid var(--pink);border-radius:var(--radius);
 }
 .tabBtn{
   flex:1;padding:8px 4px;border-radius:14px;font-weight:800;font-size:12.5px;
@@ -340,7 +335,7 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 .tabBtn.active{color:var(--ink);background:#fff;box-shadow:var(--shadow);}
 .tabBtn.active::after{
   content:"";position:absolute;left:22%;right:22%;bottom:3px;height:3px;border-radius:3px;
-  background:var(--gold-grad);background-size:200% 100%;animation:shimmer 1.6s linear infinite;
+  background:var(--gold-grad);background-size:100% 100%;
 }
 .tabBtn .glow{position:absolute;top:2px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);animation:pulseGlow 1s ease-in-out infinite;}
 @keyframes pulseGlow{0%,100%{transform:scale(.7);opacity:.6;}50%{transform:scale(1.2);opacity:1;}}
@@ -574,7 +569,7 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 const SAVE_KEY="hihiiro_clicker_save_v1";
 const SAVE_KEY_BACKUP="hihiiro_clicker_save_v1_bak";
 const VERSION=7;
-const BUILD="4cf27badb170";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
+const BUILD="633e27b03bcd";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
 const AUTOSAVE_MS=10000;
 const SAVE_MIN_GAP_MS=2000;
 const TICK_MS=100;
@@ -2056,6 +2051,24 @@ function renderSettings(p){
   <div class="setRow"><div><div class="lbl">ダメージ数字</div><div class="sub">タップ時の数字ポップ</div></div><div class="${tg(s.damageNumbers)}" data-action="toggle" data-key="damageNumbers" role="switch" aria-checked="${s.damageNumbers}" tabindex="0" aria-label="ダメージ数字"></div></div>
   <div class="setRow"><div><div class="lbl">バイブ(対応端末)</div><div class="sub">タップの触覚フィードバック</div></div><div class="${tg(s.haptics)}" data-action="toggle" data-key="haptics" role="switch" aria-checked="${s.haptics}" tabindex="0" aria-label="バイブ"></div></div>
   <div class="setLine">タップ数・撃破履歴などは「記録」タブで見られます。</div>
+  <div class="panelHead" style="margin-top:6px">📦 データの引き継ぎ・バックアップ</div>
+  <div class="setLine">キーをコピーして保管すれば、別の端末へ移したり復元できるよ。</div>
+  <div class="ioBox">
+    <div class="lbl" style="padding:2px 2px 4px">📤 エクスポート（キーを作る）</div>
+    <button class="buyBtn" data-action="export" style="width:100%;min-width:0">🔑 キーを作成</button>
+    <textarea id="exportKey" readonly placeholder="「キーを作成」を押すとここに表示されるよ" style="width:100%;min-height:56px;margin:6px 0;border-radius:10px;border:1.5px solid #FFD3E4;padding:8px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;resize:vertical;box-sizing:border-box;color:#7a5a66;background:#FFF8FB"></textarea>
+    <button class="buyBtn" data-action="copyexport" style="width:100%;min-width:0;background:linear-gradient(100deg,#A7E2F2,#7FD8E8)">📋 コピー</button>
+  </div>
+  <div style="height:2px;background:linear-gradient(90deg,transparent,#FFD3E4 50%,transparent);margin:10px 10px"></div>
+  <div class="ioBox">
+    <div class="lbl" style="padding:2px 2px 4px">📥 インポート（キーで戻す）</div>
+    <textarea id="importKey" placeholder="ここにキーを貼り付けてね" style="width:100%;min-height:56px;margin:6px 0;border-radius:10px;border:1.5px solid #C9A7F0;padding:8px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;resize:vertical;box-sizing:border-box;color:#7a5a66;background:#FBF8FF"></textarea>
+    <div style="display:flex;gap:6px">
+      <button class="buyBtn" data-action="pasteimport" style="flex:1;min-width:0;background:linear-gradient(100deg,#C9A7F0,#A77FE0)">📋 貼り付け</button>
+      <button class="dangerBtn" data-action="import" style="flex:1;min-width:0">📥 読み込む</button>
+    </div>
+    <div class="setLine">インポートすると今のデータは上書きされます。心配なら先に自分のキーをエクスポートして保管してね。</div>
+  </div>
   <div style="padding:8px 6px"><button class="dangerBtn" data-action="hardreset">🗑️ はじめからやり直す(全消去)</button></div>
   <div class="setLine">セーブは自動。ヒヒイロカネ・クリッカー v${VERSION}。すべての進行はこの端末のブラウザに保存されます。</div>`;
   p.innerHTML=html;
@@ -2138,10 +2151,13 @@ function gameTick(){
   D.dirtyHUD=true;
 }
 
-let _prevTs=0, _recAcc=0;
+let _prevTs=0, _recAcc=0, _lastRenderTs=0;
+const RENDER_MIN_MS=32;   // 描画は約30fps上限(省電力。CSSアニメ/タップ演出は十分滑らか)
 function renderLoop(ts){
+  requestAnimationFrame(renderLoop);
+  if(ts-_lastRenderTs<RENDER_MIN_MS) return;   // フレーム間引き
   const dt=_prevTs?Math.min((ts-_prevTs)/1000,0.05):0.016;
-  _prevTs=ts;
+  _prevTs=ts; _lastRenderTs=ts;
   // HUD
   if(D.dirtyHUD){ renderHUD(); renderSuper(); D.dirtyHUD=false; }
   // 記録タブは表示中、約4Hzでプレイ時間などを即時更新
@@ -2161,7 +2177,6 @@ function renderLoop(ts){
     D.shake*=Math.pow(0.001,dt); // 速い減衰
     if(D.shake<0.2){D.shake=0;dom.battle.style.transform="";}
   }
-  requestAnimationFrame(renderLoop);
 }
 function updateFx(dt){
   // ダメージ数字
@@ -2366,6 +2381,10 @@ function onPanelClick(ev){
   else if(a==="prestige"){ confirmPrestige(); }
   else if(a==="buyall"){ if(buyAllCheapest()>0){ renderParty(); D.dirtyPanel=true; renderPanel(true); } }
   else if(a==="toggle"){ toggleSetting(key); }
+  else if(a==="export"){ doExportKey(); }
+  else if(a==="copyexport"){ doCopyExport(); }
+  else if(a==="pasteimport"){ doPasteImport(); }
+  else if(a==="import"){ doImportKey(); }
   else if(a==="hardreset"){ confirmHardReset(); }
 }
 function toggleSetting(key){
@@ -2498,6 +2517,80 @@ function confirmHardReset(){
     toast("はじめからになりました。がんばろう！",{ms:2600});
   };
 }
+// ===== データ引き継ぎ(エクスポート/インポート) =====
+// セーブJSONを "HHK1.<チェックサム>.<base64(UTF-8)>" のキー文字列にしてコピペで持ち運べるようにする。
+// チェックサム(FNV-1a 32bit)でコピペ時の破損・欠落・打ち間違いを検知する。
+function _ckHash(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return (h>>>0).toString(36); }
+function exportSave(){
+  try{ state.lastSeen=nowMs(); const json=safeJSON.stringify(state); if(!json) return null;
+    const b64=btoa(unescape(encodeURIComponent(json)));
+    return "HHK1."+_ckHash(b64)+"."+b64; }catch(e){ return null; }
+}
+function decodeSaveKey(str){
+  if(typeof str!=="string") return {ok:false,err:"キーが空だよ"};
+  const m=str.trim().replace(/\s+/g,"");   // 改行・空白は除去(コピペ対策)
+  const parts=m.split(".");
+  if(parts.length<3||parts[0]!=="HHK1") return {ok:false,err:"キーの形式が違うみたい（HHK1. で始まるよ）"};
+  const chk=parts[1], b64=parts.slice(2).join(".");
+  if(_ckHash(b64)!==chk) return {ok:false,err:"キーが壊れているか一部が欠けているみたい（コピーし直してね）"};   // チェックサム照合
+  let json;
+  try{ json=decodeURIComponent(escape(atob(b64))); }catch(e){ return {ok:false,err:"キーが壊れているみたい"}; }
+  const raw=safeJSON.parse(json);
+  if(!raw||typeof raw!=="object"||!raw.stage||raw.hihiirokane===undefined) return {ok:false,err:"データを読めなかった"};
+  return {ok:true, raw};
+}
+function applyImport(raw){
+  try{
+    const migrated=migrate(raw);
+    try{ const cur=localStorage.getItem(SAVE_KEY); if(cur) localStorage.setItem(SAVE_KEY_BACKUP,cur); }catch(e){}  // 直前データを退避
+    state=migrated;                       // in-memory も差し替え(離脱時保存での巻き戻り防止)
+    setupStage_keepHp(); recomputeDerived();
+    state.lastSeen=nowMs();
+    localStorage.setItem(SAVE_KEY, safeJSON.stringify(state));
+    return true;
+  }catch(e){ return false; }
+}
+function copyText(t){
+  if(navigator.clipboard&&navigator.clipboard.writeText){ return navigator.clipboard.writeText(t).then(()=>true,()=>false); }
+  try{ const ta=document.getElementById("exportKey"); if(ta){ta.focus();ta.select();} const ok=document.execCommand&&document.execCommand("copy"); return Promise.resolve(!!ok); }catch(e){ return Promise.resolve(false); }
+}
+function doExportKey(){
+  const k=exportSave(); const ta=document.getElementById("exportKey");
+  if(!k||!ta){ toast("エクスポートに失敗したよ",{type:"warn"}); return; }
+  ta.value=k; try{ta.focus();ta.select();}catch(e){}
+  copyText(k).then(ok=>toast(ok?"キーを作成してコピーしたよ📋":"キーを作成したよ（コピーを押して保存してね）",{ms:2400}));
+}
+function doCopyExport(){
+  const ta=document.getElementById("exportKey");
+  if(!ta||!ta.value){ toast("先に「キーを作成」を押してね",{type:"info"}); return; }
+  copyText(ta.value).then(ok=>toast(ok?"コピーしたよ📋":"コピーできなかった…長押しで選択してね",{type:ok?undefined:"warn",ms:2200}));
+}
+function doPasteImport(){
+  const ta=document.getElementById("importKey"); if(!ta) return;
+  if(navigator.clipboard&&navigator.clipboard.readText){
+    navigator.clipboard.readText().then(
+      t=>{ if(t&&t.trim()){ ta.value=t.trim(); toast("貼り付けたよ📋 「読み込む」を押してね",{ms:2000}); } else { ta.focus(); toast("クリップボードが空みたい",{type:"info"}); } },
+      ()=>{ ta.focus(); toast("貼り付けできなかった…枠を長押しで貼り付けてね",{type:"warn",ms:2800}); });
+  } else { ta.focus(); toast("枠を長押しで貼り付けてね",{type:"info",ms:2400}); }
+}
+function doImportKey(){
+  const ta=document.getElementById("importKey"); const str=ta?ta.value:"";
+  if(!str||!str.trim()){ toast("キーを貼り付けてね",{type:"warn"}); return; }
+  const chk=decodeSaveKey(str);
+  if(!chk.ok){ toast(chk.err||"キーを読めなかった",{type:"warn"}); return; }
+  const r=chk.raw;
+  const stg=(r.stage&&r.stage.highest)||1;
+  const cores=(r.prestige&&r.prestige.cores)||0;
+  showModal(`<h2 id="modalTitle">📥 データを読み込む？</h2>
+    <p>読み込むデータ:<br><span class="big">到達STAGE ${stg} ／ 竜核 ${cores}</span></p>
+    <p>いまのデータは上書きされます。<br>よろしいですか？</p>
+    <div class="modalBtns"><button class="mbtn-ghost" id="mNo">やめる</button><button class="mbtn-primary" id="mYes">読み込む</button></div>`);
+  document.getElementById("mNo").onclick=hideModal;
+  document.getElementById("mYes").onclick=()=>{
+    if(applyImport(chk.raw)){ hideModal(); toast("読み込んだよ！反映のためリロードします✨",{ms:1500}); setTimeout(()=>location.reload(),700); }
+    else { toast("読み込みに失敗したよ",{type:"warn"}); }
+  };
+}
 function showOfflineModal(res){
   if(Bg(res.goldGained).isZero()) return;
   const mins=Math.floor(res.elapsedMs/60000);
@@ -2562,11 +2655,11 @@ function checkRecruitHint(){
 function buildBgStars(){
   const wrap=document.getElementById("bgStars");
   let html="";
-  for(let i=0;i<18;i++){
+  for(let i=0;i<10;i++){
     const x=Math.random()*100, y=Math.random()*100, s=4+Math.random()*8;
-    const d=(Math.random()*3).toFixed(2), dd=(Math.random()*18).toFixed(2);
+    const d=(Math.random()*4).toFixed(2);
     const star=Math.random()<0.6;
-    html+=`<div class="bgstar" style="left:${x}%;top:${y}%;animation-delay:${d}s,${dd}s">`+
+    html+=`<div class="bgstar" style="left:${x}%;top:${y}%;animation-delay:${d}s">`+
       (star?`<svg width="${s}" height="${s}" viewBox="0 0 10 10"><polygon points="5,0 6,4 10,5 6,6 5,10 4,6 0,5 4,4" fill="#FFD98A"/></svg>`
            :`<svg width="${s*0.7}" height="${s*0.7}" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="#C9A7F0" opacity=".6"/></svg>`)+
       `</div>`;
