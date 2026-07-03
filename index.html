@@ -86,6 +86,7 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 #hudTop{display:flex;align-items:center;gap:8px;}
 .stageBlock{flex:1;min-width:0;}
 .stageLabel{font-weight:800;font-size:14px;letter-spacing:.03em;display:flex;align-items:center;gap:6px;}
+#stageLabel{white-space:nowrap;}   /* 深層の万進表記(322.1万など)でも折り返さない */
 .bossTag{
   font-size:10px;font-weight:800;color:#fff;background:var(--gold-grad);
   background-size:200% 100%;animation:shimmer 1.6s linear infinite;
@@ -223,6 +224,24 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 
 /* FXレイヤ */
 #fxLayer{position:absolute;inset:0;z-index:8;pointer-events:none;overflow:hidden;}
+/* ===== 快進撃(登り直し)演出: 多重撃破が続く間の速度線+急上昇カウンタ(見た目のみ・実時間不変) ===== */
+#rushFx{position:absolute;inset:0;pointer-events:none;z-index:7;display:none;overflow:hidden;}
+#rushFx.on{display:block;}
+#rushFx .lines{position:absolute;inset:-24% -10%;
+  background:repeating-linear-gradient(103deg,transparent 0 26px,rgba(255,217,138,.30) 26px 30px,transparent 30px 62px,rgba(201,167,240,.22) 62px 65px,transparent 65px 96px,rgba(167,226,242,.25) 96px 99px);
+  animation:rushLines .45s linear infinite;}
+@keyframes rushLines{from{transform:translateX(0)}to{transform:translateX(-96px)}}
+#rushFx .badge{position:absolute;top:6px;left:50%;transform:translateX(-50%);
+  background:linear-gradient(100deg,#FFD98A,#F25C7A);color:#fff;font-weight:900;font-size:14px;
+  padding:4px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(242,92,122,.35);white-space:nowrap;
+  animation:rushPulse .55s ease-in-out infinite alternate;}
+@keyframes rushPulse{from{transform:translateX(-50%) scale(1)}to{transform:translateX(-50%) scale(1.08)}}
+#rushFx .rate{position:absolute;top:34px;left:50%;transform:translateX(-50%);
+  color:#B0407E;font-weight:800;font-size:12px;text-shadow:0 1px 0 #fff;white-space:nowrap;}
+#rushFx .bar{position:absolute;left:10%;right:10%;top:54px;height:8px;border-radius:999px;
+  background:rgba(255,255,255,.6);box-shadow:inset 0 1px 3px rgba(176,64,126,.25);overflow:hidden;}
+#rushFx .bar>i{display:block;height:100%;width:0%;border-radius:inherit;
+  background:linear-gradient(90deg,#FFD98A,#F25C7A,#C9A7F0);transition:width .2s;}
 .dmgnum{
   position:absolute;font-weight:800;font-size:22px;white-space:nowrap;
   pointer-events:none;will-change:transform,opacity;transform:translate(-50%,-50%);
@@ -568,8 +587,8 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
    ===================================================================== */
 const SAVE_KEY="hihiiro_clicker_save_v1";
 const SAVE_KEY_BACKUP="hihiiro_clicker_save_v1_bak";
-const VERSION=7;
-const BUILD="874a4f5090a1";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
+const VERSION=8;
+const BUILD="5abc612107a5";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
 const AUTOSAVE_MS=10000;
 const SAVE_MIN_GAP_MS=2000;
 const TICK_MS=100;
@@ -625,10 +644,11 @@ const CC_GROWTH=5.0;               // クラスチェンジコストの段倍率
 const CC_STAGE=[9,14,20,28,38,50]; // 初回CC解放stage(仲間index)
 const CC_STEP=18;                  // 段位+1ごとに必要到達stage +18(昇段をラン全体へ分散=即マックス防止)
 // 転生: コア=生涯獲得ヒヒの桁数(指数換算の小さい整数)、倍率=PRES_FACTOR^コア(指数ボーナス)
-const PRES_LOG0=12, PRES_FACTOR=4;
-function prestigeMult(){ return powB(PRES_FACTOR,(state.prestige&&state.prestige.cores)||0); }   // Big(×PRES_FACTOR^cores, 無制限)
-// 生涯獲得ヒヒ(転生をまたいで累積)から得られる総コア
-function coresFromLife(life){ const L=(life instanceof Big)?life.log10():(life>0?Math.log10(life):-Infinity); return (isFinite(L)&&L>PRES_LOG0)?Math.floor(L-PRES_LOG0):0; }
+const PRES_LOG0=5, PRES_FACTOR=4;   // LOG0=5: 初コア=生涯獲得10^5.1(≈stage52) → 「ステージ50で解放」の看板と実態を一致
+// 竜核は生涯獲得1桁=10個(10個で×PRES_FACTOR)。粒度10倍で壁際でもカウンタが動き続ける(総量・強さは1桁=×4のまま不変)
+function prestigeMult(){ return powB(PRES_FACTOR,(((state.prestige&&state.prestige.cores)||0))/10); }   // Big(×4^(cores/10), 無制限)
+// 生涯獲得ヒヒ(転生をまたいで累積)から得られる総コア(1桁=10個)
+function coresFromLife(life){ const L=(life instanceof Big)?life.log10():(life>0?Math.log10(life):-Infinity); return (isFinite(L)&&L>PRES_LOG0)?Math.floor((L-PRES_LOG0)*10):0; }
 const CLASS_TITLES={
   sakura_kenshi:["先鋒剣士","桜花剣聖","緋天剣神","千桜の極","天斬・絶"],
   runaria_mahou:["範囲術師","月詠大魔女","星海の賢者","虚空術皇","万象・理"],
@@ -651,7 +671,8 @@ const VOICES={
 /* =====================================================================
    B2  STATE
    ===================================================================== */
-function nowMs(){return Date.now();}
+var _ffNow=0, _ffQuiet=false;   // B14 VERIFY: 仮想クロック(0=実時間)/検証中の演出・保存ミュート。varはD初期化前のnowMs呼び出しでも安全
+function nowMs(){return _ffNow||Date.now();}
 function newState(){
   const t=nowMs();
   return {
@@ -661,10 +682,10 @@ function newState(){
     hihiirokane:0, totalEarned:0,
     upgrades:{tapPower:0,critChance:0,critDamage:0,partyDps:0,goldGain:0,autoClick:0},
     girls:{}, // id -> {owned,level}
-    prestige:{cores:0, lifeEarned:0, count:0},
+    prestige:{cores:0, lifeEarned:0, count:0, grit:0},   // grit=ふんばり(新規ゾーンでの戦闘時間, 180秒=1桁。竜核のもとに乗算、転生でリセット)
     super:{charge:0, max:30}, // 必殺ゲージ(タップ30回で満タン)
     settings:{sound:true, bgm:true, motion:true, motionUserSet:false, haptics:true, damageNumbers:true},
-    stats:{totalTaps:0, totalCrits:0, bahamutDefeated:0, playTimeMs:0, recentKills:[], bestStage:1},   // bestStage=通算最高到達(転生で保持)
+    stats:{totalTaps:0, totalCrits:0, bahamutDefeated:0, playTimeMs:0, recentKills:[], bestStage:1, totalEarnedAll:0},   // bestStage=通算最高到達(転生で保持) / totalEarnedAll=本当の総獲得(Big, 登り直し分も含む。竜核用のlifeEarnedとは別物)
     onboard:{tapDone:false, shopHinted:false, recruitHinted:false, idleHinted:false, done:false},
   };
 }
@@ -828,6 +849,10 @@ function migrate(raw){
     }
     v=6;
   }
+  if(v<8){ // 竜核の粒度を10倍(1桁=10個, 10個で×4)へ。既存コアは×10で等価変換(強さ不変)
+    if(raw.prestige) raw.prestige.cores=Math.max(0,Math.floor(sanitizeNum(raw.prestige.cores,0)))*10;
+    v=8;
+  }
   // 既定値で欠損補完
   const base=newState();
   deepMergeDefaults(raw,base);
@@ -843,6 +868,7 @@ function migrate(raw){
   raw.prestige.lifeEarned=toBig(raw.prestige.lifeEarned);
   raw.prestige.cores=Math.max(0,Math.floor(sanitizeNum(raw.prestige.cores,0)));
   raw.prestige.count=Math.max(0,Math.floor(sanitizeNum(raw.prestige.count,0)));
+  raw.prestige.grit=Math.max(0,sanitizeNum(raw.prestige.grit,0));
   // 必殺ゲージ sanitize
   if(!raw.super||typeof raw.super!=="object") raw.super={charge:0,max:30};
   raw.super.max=Math.max(1,Math.floor(sanitizeNum(raw.super.max,30)));
@@ -852,11 +878,14 @@ function migrate(raw){
   // 通算最高到達: 旧セーブは現在の到達最高で初期化(以後は転生で保持)
   if(!raw.stats||typeof raw.stats!=="object") raw.stats={};
   raw.stats.bestStage=Math.max(Math.floor(sanitizeNum(raw.stats.bestStage,1)), raw.stage.highest);
+  // 本当の総獲得(Big): 旧セーブには無い(=0)ので、少なくとも生涯獲得(竜核用)以上として初期化
+  raw.stats.totalEarnedAll=toBig(raw.stats.totalEarnedAll||0).max(toBig(raw.prestige.lifeEarned).add(raw.totalEarned));
   raw.lastSeen=sanitizeNum(raw.lastSeen,nowMs());
   raw.version=VERSION;
   return raw;
 }
 function save(reason){
+  if(_ffQuiet) return false;   // 検証早送り中は保存しない(実セーブ保護＋高速化)
   const t=nowMs();
   // throttle: forceでなければ最短間隔を守る(連打/頻発対策)
   if(reason!=="force" && t-D.lastSaveAt<SAVE_MIN_GAP_MS) return false;
@@ -884,6 +913,7 @@ function applyOfflineProgress(now){
   // 経過時間ぶんの総ダメージを、各ステージの実HPを順次差し引きながら討伐ループで消費。
   let remainingDmg=dps.mul(elapsed/1000);   // Big
   let kills=0, gold=BIG0, credit=BIG0, stagesGained=0;   // gold=所持(常時) / credit=総獲得(新規ゾーンのみ)
+  let nzSec=0; const grit0=state.prestige.grit||0;       // 新規ゾーンでの戦闘時間(ふんばり) — オフラインでも積もる
   const startStage=state.stage.index;
   let curHp=state.bahamut.hp; // 進行中ボスの残HPから充当
   if(!(curHp instanceof Big)||curHp.isZero()) curHp=bahamutHp(state.stage.index);
@@ -895,7 +925,7 @@ function applyOfflineProgress(now){
     kills++;
     const s=state.stage.index; const rw=rewardFor(s);
     gold=gold.add(rw);
-    if(s>(state.stats.bestStage||0)){ credit=credit.add(rw); state.stats.bestStage=s; }   // 新規ゾーンのみコアの元に加算
+    if(s>(state.stats.bestStage||0)){ credit=credit.add(rw); state.stats.bestStage=s; nzSec+=Math.pow(10,Bg(curHp).log10()-dps.log10()); }   // 新規ゾーンのみコアの元に加算+ふんばり時間を蓄積
     state.stage.index++;
     stagesGained++;
     if(state.stage.index>state.stage.highest) state.stage.highest=state.stage.index;
@@ -904,11 +934,12 @@ function applyOfflineProgress(now){
   }
   // maxHp/tier/HP整合を再導出(stage.index更新後)
   setupStage_keepHp();
-  if(!gold.isZero()) state.hihiirokane=Bg(state.hihiirokane).add(gold);
-  if(!credit.isZero()) state.totalEarned=Bg(state.totalEarned).add(credit);
+  if(!gold.isZero()){ state.hihiirokane=Bg(state.hihiirokane).add(gold); state.stats.totalEarnedAll=Bg(state.stats.totalEarnedAll||0).add(gold); }
+  if(!credit.isZero()) state.totalEarned=Bg(state.totalEarned).add(credit.mul(powB(10,grit0)));   // ふんばり込みで竜核のもとへ
+  if(nzSec>0&&Number.isFinite(nzSec)) state.prestige.grit=grit0+nzSec/180;
   if(stagesGained>0) recomputeDerived(); // 報酬式(goldGain/prestige連動)・DPS再計算
   if(gold>0||stagesGained>0){ D.dirtyHUD=true; D.dirtyPanel=true; D.saveDirty=true; }
-  return {elapsedMs:elapsed,goldGained:gold,kills:kills,stagesGained:stagesGained,startStage:startStage};
+  return {elapsedMs:elapsed,goldGained:gold,kills:kills,stagesGained:stagesGained,startStage:startStage,gritGained:(nzSec>0&&Number.isFinite(nzSec))?nzSec/180:0};
 }
 
 /* =====================================================================
@@ -996,8 +1027,9 @@ function onBahamutDefeated(){
   const s=state.stage.index;
   const reward=rewardFor(s);   // Big
   state.hihiirokane=Bg(state.hihiirokane).add(reward);          // 所持ヒヒ(使える金)は常に付与
+  state.stats.totalEarnedAll=Bg(state.stats.totalEarnedAll||0).add(reward);   // 本当の総獲得(記録タブ用): 登り直し分も含めて常に加算
   if(s>(state.stats.bestStage||0)){                             // 過去最高stage超え=新規ゾーンのみ総獲得(コアの元)に加算。既踏破の再取得ではコアが増えない(再到達→転生でのコア膨張対策)
-    state.totalEarned=Bg(state.totalEarned).add(reward);
+    state.totalEarned=Bg(state.totalEarned).add(reward.mul(powB(10,state.prestige.grit||0)));   // ふんばり(粘った時間)ぶん竜核のもとが大きくなる(所持ヒヒには乗らない)
     state.stats.bestStage=s;
   }
   state.stats.bahamutDefeated++;
@@ -1049,17 +1081,19 @@ function bahamutName(tier){
   const n=BAHA_EPITHETS.length;
   const ep=BAHA_EPITHETS[((tier%n)+n)%n];
   const c=Math.floor(tier/n);
-  return ep+"バハムート"+(c>0?"+"+c:"");
+  return ep+"バハムート"+(c>0?"+"+formatNumber(c):"");
 }
 // カットイン用: 「○○竜バハムート」本体と「+N」周回部を分割(語中改行を防ぎ +N だけ次行へ)
 function bahamutNameParts(tier){
   const n=BAHA_EPITHETS.length;
   const ep=BAHA_EPITHETS[((tier%n)+n)%n];
   const c=Math.floor(tier/n);
-  return {base:ep+"バハムート", plus:c>0?"+"+c:""};
+  return {base:ep+"バハムート", plus:c>0?"+"+formatNumber(c):""};
 }
 let _lastCutinAt=0;
 function showCutin(){
+  if(_ffQuiet) return;
+  if(D._rushAt && nowMs()-D._rushAt<900) return;   // 快進撃中は名乗りカットインを抑制(ステージが秒間数百進むため演出を覆い隠す)
   const layer=document.getElementById("cutinLayer"); if(!layer) return;
   const now=nowMs();
   const isBoss=state.bahamut.isBoss;
@@ -1261,7 +1295,7 @@ function doPrestige(){
   state.onboard=keepOnboard;
   state.stats=keepStats;
   state.hihiirokane=BIG0; state.totalEarned=BIG0;   // newStateはNumber0 → Bigに
-  state.prestige={cores:newCores, lifeEarned:newLife, count:cnt};
+  state.prestige={cores:newCores, lifeEarned:newLife, count:cnt, grit:0};   // ふんばりは転生でリセット(竜核へ変換済み)
   setupStage();
   recomputeDerived();
   D.saveDirty=true; D.dirtyHUD=true; D.dirtyPanel=true;
@@ -1566,6 +1600,7 @@ function treasureSE(isBoss){
   }catch(e){}
 }
 function defeatBurst(reward,isBoss){
+  if(_ffQuiet) return;
   if(state.settings.motion){
     const c=rectCenter();
     goldBarBurst(isBoss);            // ★ヒヒイロカネの金の延べ棒が大量に噴き出す
@@ -1623,6 +1658,8 @@ let _bubbleSide=0;
 // 右下/左下を交互に。新しいセリフが下、古いセリフは上へ押し上がる(最大2行)。
 function nextBubbleSide(){ _bubbleSide^=1; return _bubbleSide?"right":"left"; }
 function showVoiceLine(girlId,key){
+  if(_ffQuiet) return;
+  if(D._rushAt && nowMs()-D._rushAt<900) return;   // 快進撃中は吹き出しを抑制(バトル上部の快進撃UIと重なるため。終われば再開)
   const g=GIRL_BY_ID[girlId]; if(!g) return;
   if(_rapidHold && key==="levelup") return; // 長押し連打中はレベルアップ吹き出しを抑制(チラつき防止)
   const arr=VOICES[girlId]&&VOICES[girlId][key];
@@ -1734,6 +1771,7 @@ function toggleMasterSound(){
 // ----- トースト -----
 const toastTimers=[];
 function toast(msg,opts){
+  if(_ffQuiet) return;
   opts=opts||{};
   const root=document.getElementById("toastRoot");
   if(!root) return;
@@ -1761,7 +1799,7 @@ function cacheDom(){
 let _lastHud={};
 function renderHUD(){
   const s=state.stage.index;
-  const sl="STAGE "+s;
+  const sl="STAGE "+formatNumber(s);   // 深層は万進表記(249.7万など)。快進撃/記録タブと統一し折り返しを防ぐ
   if(_lastHud.sl!==sl){dom.stageLabel.textContent=sl;_lastHud.sl=sl;}
   const showBoss=state.bahamut.isBoss;
   if(_lastHud.boss!==showBoss){dom.bossTag.style.display=showBoss?"inline-block":"none";_lastHud.boss=showBoss;}
@@ -1771,7 +1809,7 @@ function renderHUD(){
   if(_lastHud.pw!==pw){dom.stageProgFill.style.width=pw;_lastHud.pw=pw;}
   const hv=formatNumber(state.hihiirokane);
   if(_lastHud.hv!==hv){dom.hhkVal.textContent=hv;_lastHud.hv=hv;}
-  const dv="DPS "+formatNumber(D.dps)+((state.prestige.cores>=5)?"  ⚡×"+formatNumber(prestigeMult()):"");
+  const dv="DPS "+formatNumber(D.dps)+((state.prestige.cores>=1)?"  ⚡×"+formatNumber(prestigeMult()):"");   // 倍率は竜核1個目から効いているので1個から表示(表示と実態の一致)
   if(_lastHud.dv!==dv){dom.dpsVal.textContent=dv;_lastHud.dv=dv;}
   // HPバー(transformで)
   const ratio=clamp(Bg(state.bahamut.hp).div(state.bahamut.maxHp).toNumber(),0,1);
@@ -1916,12 +1954,13 @@ function fireSuper(){
   const dmg=Bg(D.tapDmg).mul(cr.mult*SUPER_TAP_HITS).add(Bg(D.dps).mul(SUPER_DPS_SECONDS));   // Big
   const ctr=rectCenter();
   // 余剰ダメージは gameTick 同様に繰り越して複数撃破
-  let rem=dmg, kills=0; const MAX=400;
+  let rem=dmg, kills=0; const MAX=rushKillBase();   // 必殺の繰り越し上限も登り直しスケールに追従
   while(!rem.isZero() && kills<MAX){
     const hp=state.bahamut.hp;
-    if(rem.gte(hp)){ rem=rem.sub(hp); _burstKill=(kills+1<MAX)&&rem.gte(state.bahamut.maxHp); dealDamage(hp,{source:"super",silent:true}); _burstKill=false; kills++; }
+    if(rem.gte(hp)){ rem=rem.sub(hp); _burstKill=(kills+1<MAX)&&rem.gte(bahamutHp(state.stage.index+1)); dealDamage(hp,{source:"super",silent:true}); _burstKill=false; kills++; }
     else { dealDamage(rem,{source:"super",silent:true}); rem=BIG0; }
   }
+  rushMark(kills,nowMs());   // 必殺の多重撃破も快進撃演出の対象
   // 演出: ズバシャーン
   if(state.settings.damageNumbers) spawnDamageNumber(dmg,ctr.x,ctr.y-10,true,false,true);
   if(state.settings.motion){
@@ -1953,7 +1992,7 @@ function renderPanel(force){
 function gemMini(){return `<svg class="gem" viewBox="0 0 24 24"><polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="#FFD98A" stroke="#F25C7A" stroke-width="1.6"/></svg>`;}
 function renderGirls(p){
   let html=`<div class="panelHead">🌸 仲間たち — 自動でバハムートと戦ってくれるよ</div>`;
-  if(state.prestige.cores>=5) html+=`<button class="buyAllBtn" data-action="buyall">💰 安い順にまとめて強化（仲間も）</button>`;  // 竜核5個以上で解放(終盤のQoL)
+  if((state.prestige.cores||0)>=30) html+=`<button class="buyAllBtn" data-action="buyall">💰 安い順にまとめて強化（仲間も）</button>`;  // 竜核30個(旧3個と等価)で解放(転生のごほうびQoL)
   // 主人公(あなた)カード: 1タップのダメージを表示
   { const cr=getCrit();
     html+=`<div class="card">
@@ -1965,13 +2004,14 @@ function renderGirls(p){
       </div>
     </div>`;
   }
+  const _cr=getCrit(), _cf=1+_cr.chance*(_cr.mult-1);   // 会心期待値(computeDPSと同じ係数) — 表示をHUDのDPS内訳と一致させる
   GIRLS.forEach((g,idx)=>{
     const st=state.girls[g.id];
     const owned=st&&st.owned;
     const unlocked=state.stage.highest>=RECRUIT_STAGE[idx];
     if(owned){
       const T=st.tier||0;
-      const dps=prestigeMult().mul(girlDps(g,T,st.level)*(1+(state.upgrades.partyDps||0)*0.08));
+      const dps=prestigeMult().mul(girlDps(g,T,st.level)*(1+(state.upgrades.partyDps||0)*0.08)*_cf);
       const title=(CLASS_TITLES[g.id]&&CLASS_TITLES[g.id][T])||g.title;
       const tierBadge=T>0?` <span class="lv" style="background:linear-gradient(100deg,#FFD98A,#FF8A5B);color:#fff">★${T}</span>`:"";
       let btn;
@@ -2027,7 +2067,7 @@ function renderGirls(p){
 }
 function renderUpgrades(p){
   let html=`<div class="panelHead">⚔️ 強化ショップ — ヒヒイロカネで強くなろう</div>`;
-  if(state.prestige.cores>=5) html+=`<button class="buyAllBtn" data-action="buyall">💰 安い順にまとめて強化（仲間も）</button>`;  // 竜核5個以上で解放(終盤のQoL)
+  if((state.prestige.cores||0)>=30) html+=`<button class="buyAllBtn" data-action="buyall">💰 安い順にまとめて強化（仲間も）</button>`;  // 竜核30個(旧3個と等価)で解放(転生のごほうびQoL)
   UPGRADES.forEach(u=>{
     const lv=state.upgrades[u.id]||0;
     const maxed=u.max!=null&&lv>=u.max;
@@ -2050,28 +2090,33 @@ function renderUpgrades(p){
 function renderPrestige(p){
   const can=canPrestige();
   const cores=prestigeGain();
-  const nextMult=powB(PRES_FACTOR,(state.prestige.cores||0)+cores);
+  const nextMult=powB(PRES_FACTOR,((state.prestige.cores||0)+cores)/10);
+  const gritN=Math.floor((state.prestige.grit||0)*10);   // ふんばり=180秒で竜核10個ぶん(1桁)
   let html=`<div class="panelHead">🐉 転生(竜核を捧げる) — 全進行をリセットし永久に強化</div>`;
   html+=`<div class="card" style="flex-direction:column;align-items:stretch;gap:6px">
     <div class="cardEff" style="font-size:13px">現在の転生ボーナス: 全ダメージ・全報酬 ×${formatNumber(prestigeMult())}</div>
-    <div class="cardDesc">竜核: ${formatNumber(state.prestige.cores)}（核1つで ×${PRES_FACTOR}） ／ 転生回数: ${state.prestige.count}</div>
-    <div class="cardDesc">到達最高ステージ: ${state.stage.highest}</div>
+    <div class="cardDesc">竜核: ${formatNumber(state.prestige.cores)}（10個で ×${PRES_FACTOR}） ／ 転生回数: ${state.prestige.count}</div>
+    <div class="cardDesc">到達最高ステージ: ${formatNumber(state.stage.highest)}</div>
+    ${gritN>=1?`<div class="cardDesc">🔥 ふんばり: <b>+${formatNumber(gritN)}</b> 竜核ぶん — 新しいステージで戦った時間だけ増えて、倒した瞬間の竜核のもとに乗るよ（タップでも加速！転生でリセット）</div>`:""}
   </div>`;
   if(can){
     html+=`<div class="card" style="flex-direction:column;align-items:stretch;gap:8px">
       <div class="cardTitle">いま転生すると…</div>
-      <div class="cardEff">竜核 +${cores}　→　ボーナス ×${formatNumber(nextMult)} に強化！</div>
-      <div class="cardDesc">ステージ・仲間・強化・ヒヒイロカネはすべて初期化されるけど、2周目は一気に駆け抜けられるよ。</div>
+      <div class="cardEff">竜核 +${formatNumber(cores)}　→　ボーナス ×${formatNumber(nextMult)} に強化！</div>
+      <div class="cardDesc">ステージ・仲間・強化・ヒヒイロカネ・ふんばりはすべて初期化されるけど、2周目は一気に駆け抜けられるよ。</div>
       <button class="buyBtn" data-action="prestige" style="min-width:0;padding:12px">竜核を捧げて転生する</button>
     </div>`;
-  } else if(state.stage.highest<50){
-    html+=`<div class="card"><div class="cardBody"><div class="cardTitle">🔒 ステージ50で解放</div><div class="cardDesc">あと ${Math.max(0,50-state.stage.highest)} ステージ！もっと先へ進もう。</div></div></div>`;
   } else {
-    // ステージ50到達済みだが、今転生しても竜核が増えない＝生涯獲得ヒヒ(累積)が次のコアの桁に届いていない
+    // 解放条件を2つとも実数値で表示(実際に転生可能になる値とカウントを一致させる)
     const life=prestigeLifeIfNow();
-    const target=powB(10, PRES_LOG0 + (state.prestige.cores||0) + 1);   // 次のコアに必要な生涯獲得ヒヒ = 10^(PRES_LOG0+cores+1)
-    html+=`<div class="card"><div class="cardBody"><div class="cardTitle">🔒 もう少しで転生できるよ！</div>`
-        + `<div class="cardDesc">生涯獲得ヒヒが <b>${formatNumber(target)}</b> に届くと 竜核 +1 で転生解放！<br>いまの生涯獲得: ${formatNumber(life)}（ステージを進めてもっと稼ごう）</div></div></div>`;
+    const target=powB(10, PRES_LOG0 + ((state.prestige.cores||0)+1)/10);   // 竜核+1に必要な生涯獲得ヒヒ = 10^(PRES_LOG0+(cores+1)/10)
+    const okStage=state.stage.highest>=50;
+    const okLife=life.gte(target);   // 通常ここはfalse(両方trueならcan=true)
+    const row=(ok,label,now)=>`<div class="cardDesc" style="display:flex;gap:6px;align-items:baseline"><span>${ok?"✅":"🔒"}</span><span><b>${label}</b><br>${now}</span></div>`;
+    html+=`<div class="card" style="flex-direction:column;align-items:stretch;gap:6px"><div class="cardTitle">🔒 転生の解放条件（2つとも満たすと解放）</div>`
+        + row(okStage, "ステージ 50 に到達する", okStage?"到達済み！":`いま ステージ ${state.stage.highest}（あと ${50-state.stage.highest}）`)
+        + row(okLife, `生涯獲得ヒヒ ${formatNumber(target)} を貯める`, `いま ${formatNumber(life)}`)
+        + `<div class="cardDesc">生涯獲得ヒヒは転生しても減らない竜核用のカウントだよ。※すでに踏破したステージ（${formatNumber(state.stats.bestStage||0)} 以下）を登り直しても増えないよ。</div></div>`;
   }
   p.innerHTML=html;
 }
@@ -2122,7 +2167,7 @@ function renderRecords(p){
       + cell("総タップ", formatNumber(st.totalTaps)+" 回")
       + cell("会心", formatNumber(st.totalCrits)+" 回 ("+critRate+"%)")
       + cell("プレイ時間", fmtDuration(st.playTimeMs))
-      + cell("総獲得(通算)", formatNumber(prestigeLifeIfNow()))
+      + cell("総獲得(通算)", formatNumber(Bg(state.stats.totalEarnedAll||0)))
       + cell("転生", state.prestige.count+" 回 ×"+formatNumber(prestigeMult()))
       + `</div>`;
   const kills=st.recentKills||[];
@@ -2147,6 +2192,46 @@ function renderRecords(p){
 /* =====================================================================
    B6  LOOP
    ===================================================================== */
+// ===== 快進撃(登り直し)演出と連打ブースト =====
+const RUSH_MIN_KILLS=30;   // この体数以上/回 の多重撃破で「快進撃」とみなす
+let _rushEl=null, _rushRate=0;
+// 登り直しの撃破上限: 基本値は通算bestの√でスケール(深いほど登り直しは長いが、比例ほどは伸びない=√best秒オーダー)。
+// 40万stage以下は従来の400のまま。放置の目安: 150万=約10分 / 1300万=約29分 / 1億=約82分。
+function rushKillBase(){
+  const best=state.stats.bestStage||0;
+  return Math.max(400, Math.round(0.65*Math.sqrt(best)));
+}
+// 連打ブースト: 自動DPSの1回あたり撃破上限が直近1秒のタップ回数に応じて増える(n回/秒 → (1+n)倍。5連打で約6倍)
+let _tapTimes=[];
+function rushKillCap(now){
+  while(_tapTimes.length && _tapTimes[0]<now-1000) _tapTimes.shift();
+  return rushKillBase()*(1+_tapTimes.length);
+}
+function rushMark(kills,t){
+  if(kills<RUSH_MIN_KILLS) return;
+  _rushRate=_rushRate*0.6+(kills/(AUTO_DMG_MS/1000))*0.4;   // 体数/秒(EMAで滑らかに)
+  D._rushAt=t;
+}
+function updateRushFx(){
+  const active=state.settings.motion && D._rushAt && (nowMs()-D._rushAt)<900;
+  if(!active){ if(_rushEl) _rushEl.classList.remove("on"); return; }
+  if(!_rushEl){
+    _rushEl=document.createElement("div"); _rushEl.id="rushFx";
+    _rushEl.innerHTML='<div class="lines"></div><div class="badge">⚡ 快進撃！</div><div class="rate"></div><div class="bar"><i></i></div>';
+    dom.battle.appendChild(_rushEl);
+  }
+  _rushEl.classList.add("on");
+  const s=state.stage.index;
+  const best=Math.max(state.stats.bestStage||0,state.stage.highest);
+  const rate="STAGE "+formatNumber(s)+"（+"+formatNumber(Math.round(_rushRate))+"/秒）";
+  const bar=_rushEl.querySelector(".bar");
+  if(s<best){   // 既踏破ゾーンの登り直し中: 通算最高までの進捗バー
+    const p=Math.min(100,s/best*100);
+    bar.style.display="";
+    bar.firstChild.style.width=p.toFixed(1)+"%";
+    _rushEl.querySelector(".rate").textContent=rate+"・通算最高まで "+p.toFixed(0)+"%";
+  } else { bar.style.display="none"; _rushEl.querySelector(".rate").textContent=rate; }
+}
 function gameTick(){
   if(D._noTick) return;   // インポート直後〜リロードまでは進行を止める(進行中の前進が新stateに適用されるのを防ぐ)
   const t=nowMs();
@@ -2155,6 +2240,9 @@ function gameTick(){
   if(!Number.isFinite(dt)||dt<0) dt=TICK_MS/1000;
   if(dt>1.5) dt=1.5; // 大きなギャップは上限(バックグラウンド復帰など)
   state.stats.playTimeMs+=dt*1000;
+  // ふんばりボーナス: 新規ゾーン(通算bestより先)で戦っている時間を蓄積(180秒=1桁)。
+  // 倒した時に竜核のもと(totalEarned)へ×10^gritで反映=「倒すのに時間がかかるほど、倒した瞬間の竜核が大きい」
+  if(state.stage.index>(state.stats.bestStage||0)) state.prestige.grit=(state.prestige.grit||0)+dt/180;
   // DPS適用: 仲間の攻撃を定周期で実HPへ適用。HPへは平均DPS(owed)をそのまま入れる。
   // (会心は computeDPS の critFactor に既に内包済み。ここで通常/会心に割ると高critDamage建てで
   //  通常ヒットが owed/cf まで小さくなり、巨大HPに対し桁落ち=ほぼ無反応・表示も小桁で「減らない」ように見える)
@@ -2168,18 +2256,19 @@ function gameTick(){
       let dmg=owed;    // 実ダメージ=平均DPS(owed)。会心でも量は変えず(彩りのみ)
       if(state.settings.damageNumbers) spawnDamageNumber(dmg,null,null,isCrit,true);     // auto=true: 非会心=小シアン / 会心=控えめゴールド「会心」
       if(state.settings.motion) spawnHitSpark(null,null,false);                          // 粒子は通常量(タップ会心より控えめ)
-      // 1tickのキル上限は400固定。転生後の既踏破ゾーンの登り直しも通常の撃破ループで段階的に進む(ワープ無し)
-      let kills=0; const MAXK=400;
+      // 1tickのキル上限は基本400。連打中はタップ回数/秒に応じて上限が増える(快進撃を連打で加速)
+      let kills=0; const MAXK=rushKillCap(t);
       while(!dmg.isZero() && kills<MAXK){
         const hp=state.bahamut.hp;
         if(dmg.gte(hp)){
           dmg=dmg.sub(hp);
-          const willKillAgain=(kills+1<MAXK)&&dmg.gte(state.bahamut.maxHp);
+          const willKillAgain=(kills+1<MAXK)&&dmg.gte(bahamutHp(state.stage.index+1));   // 次ステージのHPで予測(現HP基準だと壁到達の最後の1体が討伐履歴に残らない)
           _burstKill=willKillAgain;
           dealDamage(hp,{source:"dps",silent:true});
           _burstKill=false; kills++;
         } else { dealDamage(dmg,{source:"dps",silent:true}); dmg=BIG0; }
       }
+      rushMark(kills,t);   // 多重撃破が続く間は快進撃演出(見た目のみ)
     }
     // たまに攻撃モーション
     if(state.settings.motion && Math.random()<0.25) partyAttackAnim();
@@ -2204,6 +2293,8 @@ function renderLoop(ts){
   if(currentTab==="records"){ _recAcc+=dt; if(_recAcc>=0.25){ _recAcc=0; D.dirtyPanel=true; } }
   // パネル
   renderPanel(false);
+  // 快進撃演出(登り直し)
+  updateRushFx();
   // FX進行
   updateFx(dt);
   // shake
@@ -2304,6 +2395,30 @@ function antiSpamCheck(now){
   }
   return false;
 }
+// タップ1回ぶんのダメージ適用(tapAttackと検証ffで共用)。
+// 1撃で倒せる状況(転生後の登り直し=快進撃中など)は余剰を繰り越して多重撃破 → 連打するほど登りが速くなる。
+function tapStrike(_now){
+  _tapTimes.push(_now);   // 連打ブースト用(直近1秒のタップ数 → 自動の撃破上限を引き上げ)
+  // 新規ゾーン(通算bestより先)ではタップ1回=ふんばり+2秒ぶん(連打で竜核のもとが育つ。5連打/秒なら実時間の約10倍速)
+  if(state.stage.index>(state.stats.bestStage||0)) state.prestige.grit=(state.prestige.grit||0)+2/180;
+  if(Bg(D.tapDmg).gte(Bg(state.bahamut.hp))){
+    const cr=getCrit(); const isCrit=Math.random()<cr.chance;
+    let rem=Bg(D.tapDmg); if(isCrit){ rem=rem.mul(cr.mult); state.stats.totalCrits++; }
+    const shown=rem;
+    let kills=0; const MAXK=rushKillBase();   // 1タップの繰り越し上限=自動1回ぶんの基本値(√bestスケール)
+    while(!rem.isZero() && kills<MAXK){
+      const hp=state.bahamut.hp;
+      if(rem.gte(hp)){ rem=rem.sub(hp); _burstKill=(kills+1<MAXK)&&rem.gte(bahamutHp(state.stage.index+1)); dealDamage(hp,{source:"tap-rush",silent:true}); _burstKill=false; kills++; }
+      else { dealDamage(rem,{source:"tap-rush",silent:true}); rem=BIG0; }
+    }
+    rushMark(kills,_now);
+    // 演出はタップ1回ぶんに集約(会心はdealDamageでなくここで判定済み)
+    if(state.settings.damageNumbers) spawnDamageNumber(shown,null,null,isCrit);
+    if(state.settings.motion) spawnHitSpark(null,null,isCrit);
+  } else {
+    dealDamage(D.tapDmg,{source:"tap",x:null,y:null});
+  }
+}
 function tapAttack(ev){
   ev.preventDefault();
   unlockAudio();
@@ -2314,7 +2429,7 @@ function tapAttack(ev){
   state.stats.totalTaps++;
   // 敵味方エリアのどこをタップしても、ダメージ表示/火花はバハムート周辺に出す
   // (x,y=null → spawnDamageNumber/spawnHitSpark がボス中心＋ばらつきで描画)
-  dealDamage(D.tapDmg,{source:"tap",x:null,y:null});
+  tapStrike(_now);
   // 必殺ゲージ蓄積(タップ1回=+1)
   addSuperCharge(1);
   // バウンス(boss-breathe と transform 競合しない #bossWrap 側へ当てる)
@@ -2533,15 +2648,15 @@ function hideModal(){
 }
 function confirmPrestige(){
   const cores=prestigeGain();
-  const nextMult=powB(PRES_FACTOR,(state.prestige.cores||0)+cores);
+  const nextMult=powB(PRES_FACTOR,((state.prestige.cores||0)+cores)/10);   // 10個で×4(renderPrestigeと同式)
   showModal(`<h2 id="modalTitle">🐉 転生</h2>
-    <p>到達ステージ ${state.stage.highest} を捧げ、<br><span class="big">竜核 +${cores}</span> を授かります。</p>
+    <p>到達ステージ ${formatNumber(state.stage.highest)} を捧げ、<br><span class="big">竜核 +${formatNumber(cores)}</span> を授かります。</p>
     <p>全ての進行はリセットされますが、<br>全ダメージ・全報酬が永久に強化されます。</p>
     <p>新ボーナス: ×${formatNumber(nextMult)}</p>
     <div class="modalBtns"><button class="mbtn-ghost" id="mNo">やめる</button><button class="mbtn-primary" id="mYes">転生する</button></div>`);
   document.getElementById("mNo").onclick=hideModal;
   document.getElementById("mYes").onclick=()=>{
-    if(doPrestige()){ hideModal(); toast(`転生完了！竜核 +${cores}（計${state.prestige.cores}）✨ ×${formatNumber(prestigeMult())}`,{ms:3400}); renderParty(); renderBahamutSvg(); }
+    if(doPrestige()){ hideModal(); toast(`転生完了！竜核 +${formatNumber(cores)}（計${formatNumber(state.prestige.cores)}）✨ ×${formatNumber(prestigeMult())}`,{ms:3400}); renderParty(); renderBahamutSvg(); }
   };
 }
 function confirmHardReset(){
@@ -2625,7 +2740,7 @@ function doImportKey(){
   const stg=(r.stage&&r.stage.highest)||1;
   const cores=(r.prestige&&r.prestige.cores)||0;
   showModal(`<h2 id="modalTitle">📥 データを読み込む？</h2>
-    <p>読み込むデータ:<br><span class="big">到達STAGE ${stg} ／ 竜核 ${cores}</span></p>
+    <p>読み込むデータ:<br><span class="big">到達STAGE ${formatNumber(stg)} ／ 竜核 ${formatNumber(cores)}</span></p>
     <p>いまのデータは上書きされます。<br>よろしいですか？</p>
     <div class="modalBtns"><button class="mbtn-ghost" id="mNo">やめる</button><button class="mbtn-primary" id="mYes">読み込む</button></div>`);
   document.getElementById("mNo").onclick=hideModal;
@@ -2640,10 +2755,12 @@ function showOfflineModal(res){
   const hrs=Math.floor(mins/60), rm=mins%60;
   const timeStr=hrs>0?`${hrs}時間${rm}分`:`${mins}分`;
   const stageLine=(res.stagesGained>0)?`<p>ステージも <span class="big">+${formatNumber(res.stagesGained)}</span> 進んだよ！</p>`:"";
+  const gritLine=(res.gritGained>=0.1)?`<p>🔥 ふんばり <span class="big">+${formatNumber(Math.floor(res.gritGained*10))}</span> 竜核ぶん！</p>`:"";
   showModal(`<h2 id="modalTitle">おかえりなさい！</h2>
     <p>${timeStr} のあいだ、仲間たちが<br>バハムートと戦っていたよ。</p>
     <p>ヒヒイロカネ <span class="big">+${formatNumber(res.goldGained)}</span> 獲得！</p>
     ${stageLine}
+    ${gritLine}
     <div class="modalBtns"><button class="mbtn-primary" id="mOk">受け取る✨</button></div>`);
   document.getElementById("mOk").onclick=()=>{ hideModal(); blip(880,0.15); };
 }
@@ -2691,6 +2808,81 @@ function checkRecruitHint(){
     if(tabBtn && !tabBtn.querySelector(".glow")){ const g=document.createElement("span");g.className="glow";tabBtn.appendChild(g); }
   }
 }
+
+/* =====================================================================
+   B14  VERIFY — バランス検証用の早送りAPI(CDPハーネス verify/ から駆動)
+   実ロジック(gameTick/dealDamage/buyAllCheapest/doPrestige)をそのまま使い、
+   仮想クロック _ffNow でゲーム内時間だけを高速に進める(描画rAFは同期実行中
+   に走らないので演出コストゼロ)。実行中は _ffQuiet で演出/保存をミュート。
+   手動実行の事故に備え、開始時に現セーブを SAVE_KEY+"_ffbak" へ退避する。
+   時計を実時間へ戻すには __game.ffReset()(またはリロード)。
+   ===================================================================== */
+function _ffL10(x){ const v=Bg(x); return v.isZero()? -1 : v.log10(); }   // JSON安全なlog10(0→-1)
+function ffSnapshot(){
+  const g={}; for(const id in state.girls){ const x=state.girls[id]||{}; g[id]={lv:x.level||0, tier:x.tier||0, owned:!!x.owned}; }
+  return {
+    stage:state.stage.index, highest:state.stage.highest, best:state.stats.bestStage||0,
+    cores:state.prestige.cores||0, presCount:state.prestige.count||0,
+    hihiL:_ffL10(state.hihiirokane), earnedL:_ffL10(state.totalEarned), lifeL:_ffL10(prestigeLifeIfNow()),
+    dpsL:_ffL10(D.dps), tapL:_ffL10(D.tapDmg),
+    kills:state.stats.bahamutDefeated, taps:state.stats.totalTaps,
+    upg:Object.assign({},state.upgrades), girls:g,
+  };
+}
+let _ffBackedUp=false;
+// ffRun(仮想秒, {tapsPerSec, buyEveryMs, autoSuper, prestigeWallSec, snapEverySec})
+//  tapsPerSec: 手動連打の想定レート(0=放置) / buyEveryMs: まとめて強化の実行間隔(0=買わない)
+//  autoSuper: ゲージ満タンで必殺を自動発動(既定true) / prestigeWallSec: stageがこの秒数上がらず転生可能なら転生(0=しない)
+//  戻り値 {snaps:[…], events:[…], final:…}(大数はlog10で返す)
+function ffRun(seconds,opts){
+  opts=opts||{};
+  const tps=+opts.tapsPerSec||0;
+  const buyMs=("buyEveryMs" in opts)?+opts.buyEveryMs:1000;
+  const autoSuper=opts.autoSuper!==false;
+  const wallSec=+opts.prestigeWallSec||0;
+  const snapMs=Math.max(1,(+opts.snapEverySec||60))*1000;
+  if(!_ffBackedUp){ try{ const cur=localStorage.getItem(SAVE_KEY); if(cur) localStorage.setItem(SAVE_KEY+"_ffbak",cur); }catch(e){} _ffBackedUp=true; }
+  const keepSet=Object.assign({},state.settings);
+  Object.assign(state.settings,{sound:false,bgm:false,motion:false,damageNumbers:false,haptics:false});
+  _ffQuiet=true;
+  if(!_ffNow) _ffNow=Date.now();
+  D.lastTickAt=_ffNow; D._autoAt=_ffNow;
+  const t0=_ffNow, snaps=[], events=[];
+  let tapAcc=0, buyAcc=0, snapAcc=0;
+  let lastUpT=_ffNow, lastUpS=state.stage.index;
+  const steps=Math.max(1,Math.round(seconds*1000/TICK_MS));
+  for(let i=0;i<steps;i++){
+    _ffNow+=TICK_MS;
+    if(tps>0){
+      tapAcc+=tps*TICK_MS/1000;
+      while(tapAcc>=1){
+        tapAcc-=1;
+        state.stats.totalTaps++;
+        tapStrike(_ffNow);   // 実プレイと同じ挙動(快進撃中は繰り越し多重撃破)
+        addSuperCharge(1);
+        if(autoSuper&&superReady()) fireSuper();
+      }
+    }
+    gameTick();
+    if(buyMs>0){ buyAcc+=TICK_MS; if(buyAcc>=buyMs){ buyAcc=0; buyAllCheapest(); } }
+    if(state.stage.index>lastUpS){ lastUpS=state.stage.index; lastUpT=_ffNow; }
+    else if(wallSec>0 && (_ffNow-lastUpT)/1000>=wallSec && canPrestige()){
+      const c0=state.prestige.cores||0;
+      if(doPrestige()){
+        events.push({t:(_ffNow-t0)/1000, ev:"prestige", cores:state.prestige.cores, gained:state.prestige.cores-c0, atStage:lastUpS});
+        lastUpS=state.stage.index; lastUpT=_ffNow;
+      }
+    }
+    snapAcc+=TICK_MS;
+    if(snapAcc>=snapMs){ snapAcc=0; const s=ffSnapshot(); s.t=(_ffNow-t0)/1000; snaps.push(s); }
+  }
+  const fin=ffSnapshot(); fin.t=(_ffNow-t0)/1000;
+  Object.assign(state.settings,keepSet);
+  _ffQuiet=false;
+  D.saveDirty=false;   // 早送り結果を自動保存させない
+  return {snaps:snaps, events:events, final:fin};
+}
+function ffReset(){ _ffNow=0; D.lastTickAt=Date.now(); D._autoAt=Date.now(); }
 
 /* =====================================================================
    B10  BOOT
@@ -2759,8 +2951,17 @@ function init(){
   checkForUpdate();
   document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkForUpdate(); });
   window.addEventListener("focus",checkForUpdate);
-  // デバッグ用
-  window.__game={state,D,save,recomputeDerived,doPrestige};
+  // デバッグ/検証用(verify/ のCDPハーネスが使用)。state はゲッターにして doPrestige 後の陳腐化を防ぐ
+  window.__game={D,save,recomputeDerived,doPrestige,buyAllCheapest,canPrestige,prestigeGain,
+    ff:ffRun, ffReset,
+    fx:{bahamutHp,rewardFor,costOf,classChangeCost,girlDps,coresFromLife,prestigeMult,computeDPS,computeTapDamage,Bg},
+    data:()=>({
+      GIRLS:GIRLS.map(g=>({id:g.id,name:g.name,recruit:g.recruit,baseDps:g.baseDps,lvBase:g.lvBase})),
+      UPGRADES:UPGRADES.map(u=>({id:u.id,baseCost:u.baseCost,growth:u.growth,max:u.max})),
+      RECRUIT_STAGE,CC_BASE,CC_STAGE,CC_STEP,CC_GROWTH,LCAP,NCLASS,DPS_SLOPE,CLASSMULT,COST_C1,COST_C2,
+      PRES_LOG0,PRES_FACTOR,TICK_MS,AUTO_DMG_MS,TAP_DPS_FRACTION,AUTO_PARTY_FRACTION,
+      SUPER_TAP_HITS,SUPER_DPS_SECONDS,OFFLINE_CAP_MS,VERSION})};
+  Object.defineProperty(window.__game,"state",{get:()=>state});
 }
 // 公開時に publish.ps1 が BUILD をスタンプし version.txt も同値で出力する。実行中のBUILDと
 // 最新 version.txt が食い違えば古いキャッシュ → 保存してから一度だけ自動リロードして最新版へ。
