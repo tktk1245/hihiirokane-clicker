@@ -224,23 +224,27 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 
 /* FXレイヤ */
 #fxLayer{position:absolute;inset:0;z-index:8;pointer-events:none;overflow:hidden;}
-/* ===== 快進撃(登り直し)演出: 多重撃破が続く間の速度線+急上昇カウンタ(見た目のみ・実時間不変) ===== */
+/* ===== 快進撃(登り直し)演出: 速度線(背景, ダメージ数字の下)+情報カード(前面) ===== */
 #rushFx{position:absolute;inset:0;pointer-events:none;z-index:7;display:none;overflow:hidden;}
 #rushFx.on{display:block;}
 #rushFx .lines{position:absolute;inset:-24% -10%;
   background:repeating-linear-gradient(103deg,transparent 0 26px,rgba(255,217,138,.30) 26px 30px,transparent 30px 62px,rgba(201,167,240,.22) 62px 65px,transparent 65px 96px,rgba(167,226,242,.25) 96px 99px);
   animation:rushLines .45s linear infinite;}
 @keyframes rushLines{from{transform:translateX(0)}to{transform:translateX(-96px)}}
-#rushFx .badge{position:absolute;top:6px;left:50%;transform:translateX(-50%);
-  background:linear-gradient(100deg,#FFD98A,#F25C7A);color:#fff;font-weight:900;font-size:14px;
-  padding:4px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(242,92,122,.35);white-space:nowrap;
-  animation:rushPulse .55s ease-in-out infinite alternate;}
-@keyframes rushPulse{from{transform:translateX(-50%) scale(1)}to{transform:translateX(-50%) scale(1.08)}}
-#rushFx .rate{position:absolute;top:34px;left:50%;transform:translateX(-50%);
-  color:#B0407E;font-weight:800;font-size:12px;text-shadow:0 1px 0 #fff;white-space:nowrap;}
-#rushFx .bar{position:absolute;left:10%;right:10%;top:54px;height:8px;border-radius:999px;
-  background:rgba(255,255,255,.6);box-shadow:inset 0 1px 3px rgba(176,64,126,.25);overflow:hidden;}
-#rushFx .bar>i{display:block;height:100%;width:0%;border-radius:inherit;
+/* 情報カード: ダメージ数字(z8)より前面(z9)。半透明+ぼかしで演出の上でも読める */
+#rushHud{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:9;pointer-events:none;display:none;
+  background:rgba(255,255,255,.74);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  border:1.5px solid rgba(242,92,122,.35);border-radius:16px;padding:6px 14px 8px;
+  box-shadow:0 4px 14px rgba(176,64,126,.20);text-align:center;max-width:88%;}
+#rushHud.on{display:block;}
+#rushHud .badge{display:inline-block;background:linear-gradient(100deg,#FFD98A,#F25C7A);color:#fff;
+  font-weight:900;font-size:13px;padding:2px 12px;border-radius:999px;white-space:nowrap;
+  box-shadow:0 2px 8px rgba(242,92,122,.35);animation:rushPulse .55s ease-in-out infinite alternate;}
+@keyframes rushPulse{from{transform:scale(1)}to{transform:scale(1.07)}}
+#rushHud .rate{margin-top:3px;color:#B0407E;font-weight:800;font-size:12px;white-space:nowrap;}
+#rushHud .bar{margin-top:4px;height:6px;border-radius:999px;background:rgba(176,64,126,.16);
+  box-shadow:inset 0 1px 2px rgba(176,64,126,.2);overflow:hidden;}
+#rushHud .bar>i{display:block;height:100%;width:0%;border-radius:inherit;
   background:linear-gradient(90deg,#FFD98A,#F25C7A,#C9A7F0);transition:width .2s;}
 .dmgnum{
   position:absolute;font-weight:800;font-size:22px;white-space:nowrap;
@@ -499,6 +503,14 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
    (f)(g) アニメ無効 / reduced-motion
    ============================================================ */
 .no-motion *{animation:none!important;transition:none!important;}
+/* スマホ縦(高さ900px以下=ブラウザUI込みの一般的なスマホ)は縦の余白を節約してパネル(操作領域)を広く */
+@media(max-height:900px){
+  #titleText{font-size:11px;}
+  #subTitle{display:none;}
+  #titleBar{padding:2px 10px calc(2px + env(safe-area-inset-bottom));}
+  #hud{margin:6px 6px 3px;padding:6px 10px;}
+  #app{grid-template-rows:auto minmax(clamp(140px,28dvh,240px),1fr) auto auto minmax(0,40dvh) auto;}
+}
 @media(max-height:680px){
   #app{grid-template-rows:auto minmax(clamp(120px,27dvh,200px),1fr) auto auto minmax(0,34dvh) auto;}
   #panel{min-height:0;}
@@ -588,7 +600,7 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 const SAVE_KEY="hihiiro_clicker_save_v1";
 const SAVE_KEY_BACKUP="hihiiro_clicker_save_v1_bak";
 const VERSION=8;
-const BUILD="5abc612107a5";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
+const BUILD="820275db1d91";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
 const AUTOSAVE_MS=10000;
 const SAVE_MIN_GAP_MS=2000;
 const TICK_MS=100;
@@ -903,43 +915,94 @@ function save(reason){
     return false;
   }
 }
+// ===== オフライン一括計算用の等比和(閉形式, Big) =====
+// Σ_{i=a}^{a+k-1} r^(i-1)
+function geoSumB(r,a,k){ if(k<=0) return BIG0; return powB(r,a-1).mul(powB(r,k).sub(1)).div(r-1); }
+// 範囲 [a, a+k-1] 内のボスstage(5の倍数)だけの Σ r^(i-1)
+function bossGeoSumB(r,a,k){
+  if(k<=0) return BIG0;
+  const b0=a+((5-(a%5))%5), last=a+k-1;
+  if(b0>last) return BIG0;
+  const nb=Math.floor((last-b0)/5)+1, r5=Math.pow(r,5);
+  return powB(r,b0-1).mul(powB(r5,nb).sub(1)).div(r5-1);
+}
+// stage a から k体ぶんの合計HP / 合計報酬(ボス補正込み。stage毎のfloorは省略=誤差は1体あたり1未満)
+function hpSumB(a,k){ return geoSumB(1.13,a,k).add(bossGeoSumB(1.13,a,k).mul(2)).mul(8); }
+function rewardSumB(a,k){ const g=1+(state.upgrades.goldGain||0)*0.10;
+  return geoSumB(1.15,a,k).add(bossGeoSumB(1.15,a,k)).mul(6*g).mul(prestigeMult()); }
+
 function applyOfflineProgress(now){
   let elapsed=now-state.lastSeen;
   if(!Number.isFinite(elapsed)||elapsed<0) elapsed=0;
   elapsed=Math.min(elapsed,OFFLINE_CAP_MS);
-  if(elapsed<60000) return {elapsedMs:elapsed,goldGained:BIG0,kills:0,stagesGained:0}; // 1分未満は無視
+  if(elapsed<60000) return {elapsedMs:elapsed,goldGained:BIG0,kills:0,stagesGained:0,gritGained:0}; // 1分未満は無視
   const dps=Bg(D.dps);
-  if(dps.isZero()) return {elapsedMs:elapsed,goldGained:BIG0,kills:0,stagesGained:0};
-  // 経過時間ぶんの総ダメージを、各ステージの実HPを順次差し引きながら討伐ループで消費。
-  let remainingDmg=dps.mul(elapsed/1000);   // Big
-  let kills=0, gold=BIG0, credit=BIG0, stagesGained=0;   // gold=所持(常時) / credit=総獲得(新規ゾーンのみ)
-  let nzSec=0; const grit0=state.prestige.grit||0;       // 新規ゾーンでの戦闘時間(ふんばり) — オフラインでも積もる
+  if(dps.isZero()) return {elapsedMs:elapsed,goldGained:BIG0,kills:0,stagesGained:0,gritGained:0};
+  // オンラインと同じ制約で一括処理: 撃破数は「登り直し上限(√best)×時間」、ダメージは「DPS×時間」の予算。
+  // 閉形式(等比和)なのでループ回数上限が無い(旧実装のMAX_STEPS=20万体打ち切りが「オフラインだと一定以上貯まらない」の原因だった)
+  const elapsedSec=elapsed/1000;
+  const rate=rushKillBase()/(AUTO_DMG_MS/1000);       // 撃破数/秒の上限(オンラインの自動周期と同一)
+  const quota=Math.floor(elapsedSec*rate);
+  let budget=dps.mul(elapsedSec);                      // 総ダメージ予算 Big
+  const grit0=state.prestige.grit||0;
+  const best0=state.stats.bestStage||0;
   const startStage=state.stage.index;
-  let curHp=state.bahamut.hp; // 進行中ボスの残HPから充当
-  if(!(curHp instanceof Big)||curHp.isZero()) curHp=bahamutHp(state.stage.index);
-  const MAX_STEPS=200000; // 暴走防止(OFFLINE_CAP_MSに加えた二重の保険)
-  let steps=0;
-  while(!remainingDmg.isZero() && steps++<MAX_STEPS){
-    if(remainingDmg.lt(curHp)){ state.bahamut.hp=curHp.sub(remainingDmg); remainingDmg=BIG0; break; }
-    remainingDmg=remainingDmg.sub(curHp);
-    kills++;
-    const s=state.stage.index; const rw=rewardFor(s);
-    gold=gold.add(rw);
-    if(s>(state.stats.bestStage||0)){ credit=credit.add(rw); state.stats.bestStage=s; nzSec+=Math.pow(10,Bg(curHp).log10()-dps.log10()); }   // 新規ゾーンのみコアの元に加算+ふんばり時間を蓄積
-    state.stage.index++;
-    stagesGained++;
+  let gold=BIG0, credit=BIG0, kills=0, nzSec=0;
+  let curHp=state.bahamut.hp;                          // 進行中ボスの残HPから充当
+  if(!(curHp instanceof Big)||curHp.isZero()) curHp=bahamutHp(startStage);
+  if(budget.lt(curHp)){
+    // 1体も倒せない: 削るだけ。新規ゾーンならその時間はふんばりに積もる
+    state.bahamut.hp=curHp.sub(budget);
+    if(startStage>best0) nzSec=elapsedSec;
+  } else {
+    budget=budget.sub(curHp);
+    const rw0=rewardFor(startStage);
+    gold=gold.add(rw0);
+    if(startStage>best0) credit=credit.add(rw0);
+    kills=1;
+    // 2体目以降(stage a〜)を二分探索: 予算内で倒せる最大数(撃破数上限quotaの範囲で)
+    const a=startStage+1;
+    let lo=0, hi=Math.max(0,quota-1);
+    while(lo<hi){ const mid=(lo+hi+1)>>1; if(hpSumB(a,mid).lte(budget)) lo=mid; else hi=mid-1; }
+    const k=lo;
+    if(k>0){
+      gold=gold.add(rewardSumB(a,k));
+      const cf=Math.max(a,best0+1), ce=a+k-1;          // 新規ゾーン(通算best超え)ぶんだけコアの元に加算
+      if(ce>=cf) credit=credit.add(rewardSumB(cf,ce-cf+1));
+      kills+=k;
+    }
+    const endS=(k>0)?(a+k-1):startStage;               // 最後に倒したstage
+    state.stage.index=endS+1;
     if(state.stage.index>state.stage.highest) state.stage.highest=state.stage.index;
-    curHp=bahamutHp(state.stage.index);
-    state.bahamut.hp=curHp;
+    if(endS>best0) state.stats.bestStage=endS;
+    // 次ボスHP: 撃破数律速なら満タン(オンライン同様に余剰ダメージは持ち越さない)、ダメージ律速なら削り残しを反映
+    const nextHp=bahamutHp(state.stage.index);
+    if(kills>=quota){ state.bahamut.hp=nextHp; }
+    else {
+      const leftover=budget.sub(hpSumB(a,k));
+      const rem=nextHp.sub(leftover);
+      state.bahamut.hp=rem.isZero()?Bg(1):rem;
+    }
+    // ふんばり: 通算best以下(登り直し)に使った時間を除いた残りが新規ゾーン滞在時間
+    if(state.stage.index>best0){
+      const kA=Math.max(0,Math.min(kills,best0-startStage+1));   // best0以下で倒した数
+      let timeA=0;
+      if(kA>0){
+        const tDmg=Math.pow(10, hpSumB(startStage,kA).log10()-dps.log10());   // ダメージ律速の所要時間
+        timeA=Math.max(kA/rate, Math.min(Number.isFinite(tDmg)?tDmg:elapsedSec, elapsedSec));
+      }
+      nzSec=Math.max(0, elapsedSec-timeA);
+    }
   }
   // maxHp/tier/HP整合を再導出(stage.index更新後)
   setupStage_keepHp();
+  const gritGain=(nzSec>0&&Number.isFinite(nzSec))?nzSec/180:0;
   if(!gold.isZero()){ state.hihiirokane=Bg(state.hihiirokane).add(gold); state.stats.totalEarnedAll=Bg(state.stats.totalEarnedAll||0).add(gold); }
-  if(!credit.isZero()) state.totalEarned=Bg(state.totalEarned).add(credit.mul(powB(10,grit0)));   // ふんばり込みで竜核のもとへ
-  if(nzSec>0&&Number.isFinite(nzSec)) state.prestige.grit=grit0+nzSec/180;
-  if(stagesGained>0) recomputeDerived(); // 報酬式(goldGain/prestige連動)・DPS再計算
-  if(gold>0||stagesGained>0){ D.dirtyHUD=true; D.dirtyPanel=true; D.saveDirty=true; }
-  return {elapsedMs:elapsed,goldGained:gold,kills:kills,stagesGained:stagesGained,startStage:startStage,gritGained:(nzSec>0&&Number.isFinite(nzSec))?nzSec/180:0};
+  if(!credit.isZero()) state.totalEarned=Bg(state.totalEarned).add(credit.mul(powB(10,grit0+gritGain)));   // ふんばり込みで竜核のもとへ(オンライン同様、稼いだふんばりが乗る。支配的な壁際の報酬は終了時点のふんばりで得るため終値を使用)
+  if(gritGain>0) state.prestige.grit=grit0+gritGain;
+  if(kills>0){ state.stats.bahamutDefeated+=kills; recomputeDerived(); } // 累計撃破もオンラインと同様に加算+報酬式(goldGain/prestige連動)・DPS再計算
+  if(!gold.isZero()||kills>0){ D.dirtyHUD=true; D.dirtyPanel=true; D.saveDirty=true; }
+  return {elapsedMs:elapsed,goldGained:gold,kills:kills,stagesGained:kills,startStage:startStage,gritGained:gritGain};
 }
 
 /* =====================================================================
@@ -2212,25 +2275,29 @@ function rushMark(kills,t){
   _rushRate=_rushRate*0.6+(kills/(AUTO_DMG_MS/1000))*0.4;   // 体数/秒(EMAで滑らかに)
   D._rushAt=t;
 }
+let _rushHudEl=null;
 function updateRushFx(){
   const active=state.settings.motion && D._rushAt && (nowMs()-D._rushAt)<900;
-  if(!active){ if(_rushEl) _rushEl.classList.remove("on"); return; }
+  if(!active){ if(_rushEl){_rushEl.classList.remove("on");_rushHudEl.classList.remove("on");} return; }
   if(!_rushEl){
-    _rushEl=document.createElement("div"); _rushEl.id="rushFx";
-    _rushEl.innerHTML='<div class="lines"></div><div class="badge">⚡ 快進撃！</div><div class="rate"></div><div class="bar"><i></i></div>';
+    _rushEl=document.createElement("div"); _rushEl.id="rushFx";        // 速度線(ダメージ数字の下)
+    _rushEl.innerHTML='<div class="lines"></div>';
     dom.battle.appendChild(_rushEl);
+    _rushHudEl=document.createElement("div"); _rushHudEl.id="rushHud"; // 情報カード(ダメージ数字より前面)
+    _rushHudEl.innerHTML='<div class="badge">⚡ 快進撃！</div><div class="rate"></div><div class="bar"><i></i></div>';
+    dom.battle.appendChild(_rushHudEl);
   }
-  _rushEl.classList.add("on");
+  _rushEl.classList.add("on"); _rushHudEl.classList.add("on");
   const s=state.stage.index;
   const best=Math.max(state.stats.bestStage||0,state.stage.highest);
   const rate="STAGE "+formatNumber(s)+"（+"+formatNumber(Math.round(_rushRate))+"/秒）";
-  const bar=_rushEl.querySelector(".bar");
+  const bar=_rushHudEl.querySelector(".bar");
   if(s<best){   // 既踏破ゾーンの登り直し中: 通算最高までの進捗バー
     const p=Math.min(100,s/best*100);
     bar.style.display="";
     bar.firstChild.style.width=p.toFixed(1)+"%";
-    _rushEl.querySelector(".rate").textContent=rate+"・通算最高まで "+p.toFixed(0)+"%";
-  } else { bar.style.display="none"; _rushEl.querySelector(".rate").textContent=rate; }
+    _rushHudEl.querySelector(".rate").textContent=rate+"・通算最高まで "+p.toFixed(0)+"%";
+  } else { bar.style.display="none"; _rushHudEl.querySelector(".rate").textContent=rate; }
 }
 function gameTick(){
   if(D._noTick) return;   // インポート直後〜リロードまでは進行を止める(進行中の前進が新stateに適用されるのを防ぐ)
@@ -2954,6 +3021,8 @@ function init(){
   // デバッグ/検証用(verify/ のCDPハーネスが使用)。state はゲッターにして doPrestige 後の陳腐化を防ぐ
   window.__game={D,save,recomputeDerived,doPrestige,buyAllCheapest,canPrestige,prestigeGain,
     ff:ffRun, ffReset,
+    applyOffline:(sec)=>{ state.lastSeen=nowMs()-sec*1000; return applyOfflineProgress(nowMs()); },   // 検証用: 疑似オフライン進行
+
     fx:{bahamutHp,rewardFor,costOf,classChangeCost,girlDps,coresFromLife,prestigeMult,computeDPS,computeTapDamage,Bg},
     data:()=>({
       GIRLS:GIRLS.map(g=>({id:g.id,name:g.name,recruit:g.recruit,baseDps:g.baseDps,lvBase:g.lvBase})),
