@@ -600,7 +600,7 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 const SAVE_KEY="hihiiro_clicker_save_v1";
 const SAVE_KEY_BACKUP="hihiiro_clicker_save_v1_bak";
 const VERSION=8;
-const BUILD="ba7170be519b";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
+const BUILD="7667c17e72d3";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
 const AUTOSAVE_MS=10000;
 const SAVE_MIN_GAP_MS=2000;
 const TICK_MS=100;
@@ -664,8 +664,27 @@ function coresFromLife(life){ const L=(life instanceof Big)?life.log10():(life>0
 // ふんばり1桁(180秒 or タップ90回ぶん)の価値: +10コア or 現在コアの+0.5% の大きい方(比例制)。
 // 深層では「壁で戦う」が転生サイクル(×1.29/周)と互角以上になる: 5連打の壁張り付き=×1.76/40分、放置=×1.07/40分。
 // コア2,000未満(≈序盤)は従来の+10固定と同じ。転生でふんばりはリセットされるので run 内は線形(暴走しない)。
-const GRIT_CORES_RATE=0.005;
+const GRIT_CORES_RATE=0.04;
 function gritCoresPerDecade(){ return Math.max(10, Math.round(((state.prestige&&state.prestige.cores)||0)*GRIT_CORES_RATE)); }
+// ふんばりの蓄積(減衰つき): 貯まるほど貯まりにくい g'=(1/180)/(1+g/D)。転生でリセットされると回復速度も戻る。
+// 設計(登り直し時間込みの限界判断): 壁に着いた直後のふんばり限界レートはサイクル平均より高く、
+// 数分殴ると減衰で下回る → 「登る→壁で数分連打→転生でバンク」の混合戦略が最適(pureな即転生スパムの約1.2倍)
+const GRIT_DECAY_D=12;   // 減衰スケール(桁)。大きいほど減衰が緩い
+// ふんばりの重み: いま戦っているボスの手強さ(想定討伐秒=maxHp/DPS)に比例して貯まりやすい。
+// 瞬殺ゾーン=×0.25 / 30秒級=×1 / 90秒以上の壁ボス=×3(上限)。「時間のかかる敵ほど実りが大きい」を
+// 蓄積側にも適用=転生スパムでは高レート帯(壁ボス戦)を素通りするので取れない。DPS基準なので連打しても重みは不変
+function gritWeight(){
+  const dps=Bg(D.dps); if(dps.isZero()) return 3;
+  const r=Bg(state.bahamut.maxHp).log10()-dps.log10();   // log10(想定討伐秒)
+  return clamp(Math.pow(10,Math.min(r,3))/30, 0.25, 3);
+}
+function gritAccrue(sec){
+  if(!(sec>0)) return 0;
+  const D=GRIT_DECAY_D, g0=state.prestige.grit||0, a=1+g0/D;
+  const g1=D*(Math.sqrt(a*a + 2*sec/(180*D)) - 1);   // 微分方程式の閉形式(secまとめて加算してもオンラインと一致)
+  state.prestige.grit=g1;
+  return g1-g0;
+}
 const CLASS_TITLES={
   sakura_kenshi:["先鋒剣士","桜花剣聖","緋天剣神","千桜の極","天斬・絶"],
   runaria_mahou:["範囲術師","月詠大魔女","星海の賢者","虚空術皇","万象・理"],
@@ -1001,7 +1020,7 @@ function applyOfflineProgress(now){
   }
   // maxHp/tier/HP整合を再導出(stage.index更新後)
   setupStage_keepHp();
-  const gritGain=(nzSec>0&&Number.isFinite(nzSec))?nzSec/180:0;
+  const gritGain=(nzSec>0&&Number.isFinite(nzSec))?gritAccrue(nzSec*gritWeight()):0;   // 減衰+重みつき(終了時点のボスの手強さで代表。壁滞在が支配的なので誤差小)。state.prestige.gritも更新される
   if(!gold.isZero()){ state.hihiirokane=Bg(state.hihiirokane).add(gold); state.stats.totalEarnedAll=Bg(state.stats.totalEarnedAll||0).add(gold); }
   if(!credit.isZero()) state.totalEarned=Bg(state.totalEarned).add(credit.mul(powB(10,(grit0+gritGain)*gritCoresPerDecade()/10)));   // ふんばり込みで竜核のもとへ(オンライン同様、稼いだふんばりが乗る。支配的な壁際の報酬は終了時点のふんばりで得るため終値を使用)
   if(gritGain>0) state.prestige.grit=grit0+gritGain;
@@ -2312,9 +2331,9 @@ function gameTick(){
   if(!Number.isFinite(dt)||dt<0) dt=TICK_MS/1000;
   if(dt>1.5) dt=1.5; // 大きなギャップは上限(バックグラウンド復帰など)
   state.stats.playTimeMs+=dt*1000;
-  // ふんばりボーナス: 新規ゾーン(通算bestより先)で戦っている時間を蓄積(180秒=1桁)。
+  // ふんばりボーナス: 新規ゾーン(通算bestより先)で戦っている時間を蓄積(180秒=1桁、減衰つき)。
   // 倒した時に竜核のもと(totalEarned)へ×10^(grit×比例価値)で反映=「倒すのに時間がかかるほど、倒した瞬間の竜核が大きい」
-  if(state.stage.index>(state.stats.bestStage||0)) state.prestige.grit=(state.prestige.grit||0)+dt/180;
+  if(state.stage.index>(state.stats.bestStage||0)) gritAccrue(dt*gritWeight());
   // 必殺ゲージの自動チャージ: 2秒ごとに+1(タップなしでも約60秒で満タン。連打なら従来どおり約6秒)
   D._superAcc=(D._superAcc||0)+dt;
   if(D._superAcc>=2){ const n=Math.floor(D._superAcc/2); D._superAcc-=n*2; if(!superReady()) addSuperCharge(n); }
@@ -2474,8 +2493,8 @@ function antiSpamCheck(now){
 // 1撃で倒せる状況(転生後の登り直し=快進撃中など)は余剰を繰り越して多重撃破 → 連打するほど登りが速くなる。
 function tapStrike(_now){
   _tapTimes.push(_now);   // 連打ブースト用(直近1秒のタップ数 → 自動の撃破上限を引き上げ)
-  // 新規ゾーン(通算bestより先)ではタップ1回=ふんばり+2秒ぶん(連打で竜核のもとが育つ。5連打/秒なら実時間の約10倍速)
-  if(state.stage.index>(state.stats.bestStage||0)) state.prestige.grit=(state.prestige.grit||0)+2/180;
+  // 新規ゾーン(通算bestより先)ではタップ1回=ふんばり+2秒ぶん(連打で竜核のもとが育つ。減衰はgritAccrue側で共通)
+  if(state.stage.index>(state.stats.bestStage||0)) gritAccrue(2*gritWeight());
   if(Bg(D.tapDmg).gte(Bg(state.bahamut.hp))){
     const cr=getCrit(); const isCrit=Math.random()<cr.chance;
     let rem=Bg(D.tapDmg); if(isCrit){ rem=rem.mul(cr.mult); state.stats.totalCrits++; }
