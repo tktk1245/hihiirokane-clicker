@@ -1,0 +1,3076 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FCE9F1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>ヒヒイロカネ・クリッカー 〜バハムートの煌めき〜</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpolygon points='16,3 28,10 28,22 16,29 4,22 4,10' fill='%23FFD98A' stroke='%23FF8A5B' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+/* ============================================================
+   (a) リセット / ルート変数
+   ============================================================ */
+:root{
+  --pink:#FBBFD6; --pink-soft:#FFE3EF; --pink-bg:#FCE9F1;
+  --lav:#C9A7F0; --lav-deep:#7E5BD6;
+  --sky:#A7E2F2; --sky-deep:#2C8FB0;
+  --gold:#FFD98A; --amber:#FF8A5B; --rose:#F25C7A;
+  --ink:#5B3A66; --ink-soft:#7d5b88;
+  --hp-red:#F25C7A; --hp-amber:#FF8A5B;
+  --panel-bg:rgba(255,255,255,.72);
+  --shadow:0 4px 12px rgba(91,58,102,.14);
+  --shadow-lg:0 8px 24px rgba(91,58,102,.20);
+  --radius:20px; --radius-sm:14px;
+  --gold-grad:linear-gradient(100deg,#FFD98A,#FF8A5B,#F25C7A,#FFD98A);
+  --font:"Hiragino Maru Gothic ProN","Rounded Mplus 1c","Zen Maru Gothic","M PLUS Rounded 1c",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{
+  margin:0; height:100%;
+  overscroll-behavior:none; touch-action:manipulation;
+  user-select:none; -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  font-family:var(--font);
+  color:var(--ink);
+}
+body{
+  background:linear-gradient(180deg,#FCE9F1 0%,#F3E2FB 45%,#E2F3FB 100%);
+  overflow:hidden;
+}
+button{font-family:inherit;color:inherit;border:none;background:none;cursor:pointer;}
+button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radius:8px;}
+
+/* ============================================================
+   (b) レイアウト
+   ============================================================ */
+#app{
+  position:relative;
+  width:100%;
+  max-width:480px;
+  height:100dvh;
+  margin:0 auto;
+  display:grid;
+  /* 子: hud / battle / superBar / tabs / panel / titleBar(下部) の6行。battle(敵味方)に最低高さを保証し1frで伸長、
+     panelは minmax(0,36dvh) で0まで縮んで内部スクロール(短い画面では下が縮む)。タイトルは最下段。 */
+  grid-template-rows:auto minmax(clamp(140px,30dvh,240px),1fr) auto auto minmax(0,36dvh) auto;
+  overflow:hidden;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background:
+    radial-gradient(circle at 50% 16%,rgba(255,217,138,0.42),transparent 58%),
+    linear-gradient(180deg,#FCE9F1 0%,#F3E2FB 45%,#E2F3FB 100%);
+}
+
+/* 背景きらめき */
+#bgStars{position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden;}
+.bgstar{position:absolute;animation:twinkle 4s ease-in-out infinite;}
+@keyframes twinkle{0%,100%{opacity:.25;transform:scale(.65);}50%{opacity:.95;transform:scale(1);}}
+
+/* ============================================================
+   HUD
+   ============================================================ */
+/* タイトル(画面下部フッター) */
+#titleBar{position:relative;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:3px 10px calc(3px + env(safe-area-inset-bottom));}
+#titleText{font-weight:900;font-size:13px;line-height:1.1;letter-spacing:.03em;color:var(--rose);text-shadow:0 1px 0 rgba(255,255,255,.7),0 0 10px rgba(255,217,138,.55);white-space:nowrap;}
+#subTitle{font-weight:700;font-size:9.5px;line-height:1.2;letter-spacing:.05em;color:var(--ink-soft);white-space:nowrap;}
+#hud{
+  position:relative;z-index:5;
+  margin:8px 8px 4px;
+  padding:8px 12px;
+  background:rgba(255,255,255,.9);
+  border:2px solid var(--pink);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+}
+#hudTop{display:flex;align-items:center;gap:8px;}
+.stageBlock{flex:1;min-width:0;}
+.stageLabel{font-weight:800;font-size:14px;letter-spacing:.03em;display:flex;align-items:center;gap:6px;}
+#stageLabel{white-space:nowrap;}   /* 深層の万進表記(322.1万など)でも折り返さない */
+.bossTag{
+  font-size:10px;font-weight:800;color:#fff;background:var(--gold-grad);
+  background-size:200% 100%;animation:shimmer 1.6s linear infinite;
+  padding:1px 7px;border-radius:10px;box-shadow:0 1px 4px rgba(242,92,122,.4);
+}
+.stageProg{height:6px;border-radius:6px;background:rgba(201,167,240,.3);margin-top:4px;overflow:hidden;}
+.stageProg>div{height:100%;background:var(--gold-grad);background-size:200% 100%;border-radius:6px;transform-origin:left;transition:width .3s;}
+.currBlock{display:flex;flex-direction:column;align-items:flex-end;gap:1px;}
+.hhkRow{display:flex;align-items:center;gap:5px;font-weight:800;font-size:18px;}
+.hhkRow .gem{width:18px;height:18px;flex:none;}
+.hhkRow .val{
+  background:var(--gold-grad);background-size:100% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.dpsRow{font-size:11px;font-weight:700;color:var(--ink-soft);}
+#soundBtn{
+  width:38px;height:38px;flex:none;border-radius:50%;
+  background:rgba(255,255,255,.85);border:2px solid var(--lav);
+  display:flex;align-items:center;justify-content:center;font-size:18px;
+  box-shadow:var(--shadow);transition:transform .12s;
+}
+#soundBtn.off{opacity:.6;filter:grayscale(.5);}
+#soundBtn:active{transform:scale(.9);}
+@keyframes shimmer{0%{background-position:0% 0;}100%{background-position:200% 0;}}
+
+/* ボスHPバー */
+#hpWrap{margin-top:8px;}
+#hpbar{
+  position:relative;height:22px;border-radius:12px;
+  background:rgba(43,58,85,.16);overflow:hidden;
+  border:2px solid rgba(255,255,255,.6);
+}
+#hpfill{
+  position:absolute;inset:0;transform-origin:left;
+  background:linear-gradient(90deg,#F25C7A,#FF8A5B);
+  border-radius:10px;will-change:transform;
+}
+#hpText{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(91,58,102,.6);
+  letter-spacing:.02em;
+}
+
+/* ============================================================
+   (c) バトル領域
+   ============================================================ */
+#battle{
+  position:relative;z-index:2;overflow:hidden;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:0;
+  will-change:transform;
+}
+#bossWrap{
+  position:relative;width:min(58%,31dvh);max-width:280px;
+  filter:drop-shadow(0 10px 14px rgba(91,58,102,.18));
+  cursor:pointer;touch-action:manipulation;
+  transform-origin:50% 60%;
+}
+#bossWrap svg{display:block;width:100%;height:auto;}
+#bossSvgRoot{transform-origin:50% 60%;}
+.tap-bounce{animation:tapBounce .12s ease-out;}
+@keyframes tapBounce{0%{transform:scale(1);}35%{transform:scale(.95);}100%{transform:scale(1);}}
+.boss-breathe{animation:floatBreath 3.4s ease-in-out infinite;}
+@keyframes floatBreath{0%,100%{transform:translateY(0) scale(1,1);}50%{transform:translateY(-10px) scale(1.015,.985);}}
+.boss-hurt{animation:hurtFlash .32s ease-out, bossShake .32s ease-out;}
+@keyframes hurtFlash{0%{filter:none;}18%{filter:brightness(1.7) saturate(.2);}38%{filter:none;}100%{filter:none;}}
+@keyframes bossShake{0%{transform:translateX(0);}25%{transform:translateX(-5px);}50%{transform:translateX(4px);}75%{transform:translateX(-2px);}100%{transform:translateX(0);}}
+.boss-die{animation:defeatSquish .9s cubic-bezier(.6,-0.2,.3,1.4) forwards;}
+@keyframes defeatSquish{
+  0%{transform:scale(1) rotate(0);opacity:1;}
+  30%{transform:scale(1.12,.85) rotate(0);}
+  55%{transform:scale(.5,.5) rotate(8deg);opacity:1;}
+  75%{transform:scale(.15,.15) rotate(-12deg);opacity:.8;}
+  100%{transform:scale(0,0) rotate(-12deg);opacity:0;}
+}
+.boss-spawn{animation:bossSpawn .5s cubic-bezier(.2,.8,.3,1.2);}
+@keyframes bossSpawn{0%{transform:scale(0) translateY(30px);opacity:0;}100%{transform:scale(1) translateY(0);opacity:1;}}
+
+/* 仲間並び */
+#partyRow{
+  position:absolute;left:0;right:0;bottom:4px;z-index:3;   /* 主人公と同じ最前(下)に揃える=ウィンドウが変わっても一緒に動く */
+  display:flex;justify-content:center;align-items:flex-end;gap:0;
+  padding:0 4px;pointer-events:none;
+}
+.partyMini{width:17%;max-width:62px;min-width:0;transition:transform .15s;}
+.pmSpacer{flex:0 0 min(24%,92px);align-self:stretch;}   /* 中央=主人公ぶんを空ける */
+.pmGhost{visibility:hidden;}                              /* 左右の数を揃える透明枠(スペーサーを中央に) */
+.partyMini svg{display:block;width:100%;height:auto;}
+.pm-bob{animation:miniBob 2.3s ease-in-out infinite;}
+@keyframes miniBob{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
+.pm-attack{animation:miniAttack .3s ease-out;}
+@keyframes miniAttack{0%{transform:translateY(0) scale(1);}40%{transform:translateY(-8px) scale(1.08);}100%{transform:translateY(0) scale(1);}}
+
+/* 女の子SVGの小物アニメ(girlSvg内で付与されるクラス) */
+.sway{animation:sway 3s ease-in-out infinite;transform-box:fill-box;transform-origin:top center;}
+@keyframes sway{0%,100%{transform:rotate(-2deg);}50%{transform:rotate(2deg);}}
+.twk{animation:twk 1.8s ease-in-out infinite;transform-box:fill-box;transform-origin:center;}
+@keyframes twk{0%,100%{opacity:.5;transform:scale(.8);}50%{opacity:1;transform:scale(1.1);}}
+.ahoge{animation:ahoge 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:bottom center;}
+@keyframes ahoge{0%,100%{transform:rotate(-3deg);}50%{transform:rotate(3deg);}}
+.spinring{animation:spinring 6s linear infinite;transform-box:fill-box;transform-origin:center;}
+@keyframes spinring{to{transform:rotate(360deg);}}
+
+/* 主人公(プレイヤー自身)— バトル下部中央でボスに対峙 */
+#playerChar{
+  position:absolute;left:50%;bottom:4px;
+  width:min(22%,86px);z-index:5;pointer-events:none;
+  transform:translateX(-50%);transform-origin:50% 100%;
+  filter:drop-shadow(0 6px 8px rgba(91,58,102,.18));
+}
+#playerChar svg{display:block;width:100%;height:auto;}
+#playerChar .pcBody{animation:pcIdle 2.8s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%;}
+@keyframes pcIdle{0%,100%{transform:translateY(0);}50%{transform:translateY(-2.5px);}}
+#playerChar .pcSword{transform-box:fill-box;transform-origin:64px 96px;}
+.player-attack{animation:playerAttack .22s ease-out;}
+@keyframes playerAttack{
+  0%{transform:translateX(-50%) translateY(0) scale(1);}
+  35%{transform:translateX(-50%) translateY(-9px) scale(1.06,.96);}
+  100%{transform:translateX(-50%) translateY(0) scale(1);}
+}
+.player-attack .pcSword{animation:playerSwing .22s ease-out;}
+@keyframes playerSwing{0%{transform:rotate(14deg);}40%{transform:rotate(-34deg);}100%{transform:rotate(14deg);}}
+.player-super{animation:playerSuper .5s cubic-bezier(.2,.8,.3,1.2);}
+@keyframes playerSuper{
+  0%{transform:translateX(-50%) translateY(0) scale(1) rotate(0);}
+  30%{transform:translateX(-50%) translateY(-16px) scale(1.14,.92) rotate(-4deg);}
+  60%{transform:translateX(-50%) translateY(-4px) scale(1.05) rotate(3deg);}
+  100%{transform:translateX(-50%) translateY(0) scale(1) rotate(0);}
+}
+.player-super .pcSword{animation:playerSwingBig .5s cubic-bezier(.2,.8,.3,1.2);}
+@keyframes playerSwingBig{0%{transform:rotate(20deg);}35%{transform:rotate(-52deg);}100%{transform:rotate(14deg);}}
+/* 小さい画面: 敵をやや優先し、味方(主人公/仲間ミニ/中央スペーサー)を小さく */
+@media(max-height:680px){ #playerChar{width:min(17%,60px);bottom:2px;} #partyRow{bottom:2px;} .partyMini{max-width:48px;} .pmSpacer{flex-basis:min(20%,66px);} }
+@media(max-height:480px){ #playerChar{width:min(15%,50px);} .partyMini{max-width:40px;} .pmSpacer{flex-basis:min(18%,56px);} }
+
+/* FXレイヤ */
+#fxLayer{position:absolute;inset:0;z-index:8;pointer-events:none;overflow:hidden;}
+/* ===== 快進撃(登り直し)演出: 速度線(背景, ダメージ数字の下)+情報カード(前面) ===== */
+#rushFx{position:absolute;inset:0;pointer-events:none;z-index:7;display:none;overflow:hidden;}
+#rushFx.on{display:block;}
+#rushFx .lines{position:absolute;inset:-24% -10%;
+  background:repeating-linear-gradient(103deg,transparent 0 26px,rgba(255,217,138,.30) 26px 30px,transparent 30px 62px,rgba(201,167,240,.22) 62px 65px,transparent 65px 96px,rgba(167,226,242,.25) 96px 99px);
+  animation:rushLines .45s linear infinite;}
+@keyframes rushLines{from{transform:translateX(0)}to{transform:translateX(-96px)}}
+/* 情報カード: ダメージ数字(z8)より前面(z9)。半透明+ぼかしで演出の上でも読める */
+#rushHud{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:9;pointer-events:none;display:none;
+  background:rgba(255,255,255,.74);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  border:1.5px solid rgba(242,92,122,.35);border-radius:16px;padding:6px 14px 8px;
+  box-shadow:0 4px 14px rgba(176,64,126,.20);text-align:center;max-width:88%;}
+#rushHud.on{display:block;}
+#rushHud .badge{display:inline-block;background:linear-gradient(100deg,#FFD98A,#F25C7A);color:#fff;
+  font-weight:900;font-size:13px;padding:2px 12px;border-radius:999px;white-space:nowrap;
+  box-shadow:0 2px 8px rgba(242,92,122,.35);animation:rushPulse .55s ease-in-out infinite alternate;}
+@keyframes rushPulse{from{transform:scale(1)}to{transform:scale(1.07)}}
+#rushHud .rate{margin-top:3px;color:#B0407E;font-weight:800;font-size:12px;white-space:nowrap;}
+#rushHud .bar{margin-top:4px;height:6px;border-radius:999px;background:rgba(176,64,126,.16);
+  box-shadow:inset 0 1px 2px rgba(176,64,126,.2);overflow:hidden;}
+#rushHud .bar>i{display:block;height:100%;width:0%;border-radius:inherit;
+  background:linear-gradient(90deg,#FFD98A,#F25C7A,#C9A7F0);transition:width .2s;}
+.dmgnum{
+  position:absolute;font-weight:800;font-size:22px;white-space:nowrap;
+  pointer-events:none;will-change:transform,opacity;transform:translate(-50%,-50%);
+  color:#fff;text-shadow:-1.5px 0 var(--ink),1.5px 0 var(--ink),0 -1.5px var(--ink),0 1.5px var(--ink),-2.5px 2.5px 0 var(--ink),0 1px 3px rgba(91,58,102,.55);
+}
+.dmgnum.crit{
+  font-size:38px;
+  background:linear-gradient(90deg,#FFD98A,#FF8A5B,#F25C7A,#C9A7F0);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  text-shadow:none;filter:drop-shadow(0 0 6px rgba(255,217,138,.9)) drop-shadow(0 2px 3px rgba(242,92,122,.5)) drop-shadow(0 0 1.2px rgba(91,58,102,.95)) drop-shadow(0 0 1.2px rgba(91,58,102,.95));
+}
+.dmgnum .critlbl{display:block;font-size:11px;text-align:center;letter-spacing:.08em;}
+.dmgnum.auto{font-size:15px;font-weight:800;color:#DFF7FF;opacity:.95;
+  text-shadow:-1px 0 #2C8FB0,1px 0 #2C8FB0,0 -1px #2C8FB0,0 1px #2C8FB0,0 1px 3px rgba(44,143,176,.5);}
+/* オート(仲間)の会心: タップ会心より控えめ。中サイズのゴールド＋シアン縁取り＋小さな「会心」ラベル */
+.dmgnum.acrit{font-size:24px;font-weight:900;color:#FFE9A6;
+  text-shadow:-1.5px 0 #2C8FB0,1.5px 0 #2C8FB0,0 -1.5px #2C8FB0,0 1.5px #2C8FB0,0 0 7px rgba(255,217,138,.8);}
+.dmgnum .critlbl.acl{display:block;font-size:9px;text-align:center;letter-spacing:.14em;color:#FFE9A6;opacity:.95;}
+.dmgnum.super{font-size:clamp(42px,14vw,58px);font-weight:900;
+  background:linear-gradient(90deg,#FFF4D0,#FFD98A,#FF8A5B,#F25C7A,#C9A7F0);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 12px rgba(255,217,138,1)) drop-shadow(0 3px 4px rgba(242,92,122,.6)) drop-shadow(0 0 1.5px rgba(91,58,102,.95)) drop-shadow(0 0 1.5px rgba(91,58,102,.95));}
+.dmgnum.super .critlbl{font-size:16px;letter-spacing:.18em;}
+/* 必殺技の斜め斬撃エフェクト(ズバシャーン) */
+.superslash{position:absolute;left:-25%;top:46%;width:150%;height:16px;pointer-events:none;z-index:9;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.97),rgba(255,217,138,.92),rgba(255,255,255,.97),transparent);
+  transform:translateY(-50%) rotate(-20deg);filter:blur(1px) drop-shadow(0 0 9px rgba(255,236,180,.95));
+  opacity:0;animation:superSlash .42s ease-out forwards;}
+@keyframes superSlash{0%{opacity:0;transform:translateY(-50%) rotate(-20deg) scaleX(.12);}22%{opacity:1;}100%{opacity:0;transform:translateY(-50%) rotate(-20deg) scaleX(1.18);}}
+.particle{position:absolute;pointer-events:none;will-change:transform,opacity;transform:translate(-50%,-50%);}
+
+/* 撃破フラッシュ・リング */
+#flashLayer{position:absolute;inset:0;z-index:7;pointer-events:none;}
+.bigflash{
+  position:absolute;inset:0;
+  background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.9),rgba(255,217,138,.5) 40%,transparent 70%);
+  animation:bigflash .3s ease-out forwards;
+}
+@keyframes bigflash{0%{opacity:0;}20%{opacity:1;}100%{opacity:0;}}
+.shockring{
+  position:absolute;border:3px solid var(--gold);border-radius:50%;
+  width:60px;height:60px;transform:translate(-50%,-50%) scale(0);
+  animation:shockring .55s ease-out forwards;
+}
+@keyframes shockring{0%{transform:translate(-50%,-50%) scale(0);opacity:1;}100%{transform:translate(-50%,-50%) scale(4);opacity:0;}}
+
+/* 吹き出し */
+#bubbleLayer{position:absolute;left:0;right:0;bottom:0;z-index:9;pointer-events:none;display:flex;flex-direction:column;justify-content:flex-end;align-items:stretch;gap:5px;padding:0 10px clamp(52px,13dvh,88px);}
+.bubble.left{align-self:flex-start;}
+.bubble.right{align-self:flex-end;}
+/* 名乗りカットイン(敵の前面・大きく) */
+#cutinLayer{position:absolute;inset:0;z-index:14;pointer-events:none;overflow:hidden;}
+.cutin{position:absolute;left:0;right:0;top:33%;display:flex;flex-direction:column;align-items:center;gap:1px;padding:12px 6px;
+  background:linear-gradient(90deg,rgba(91,58,102,0) 0%,rgba(91,58,102,.5) 12%,rgba(91,58,102,.72) 50%,rgba(91,58,102,.5) 88%,rgba(91,58,102,0) 100%);
+  will-change:transform,opacity;animation:cutinSlide 1.9s cubic-bezier(.2,.9,.2,1) forwards;}
+.cutin .cstage{font-size:clamp(14px,4.6vw,22px);font-weight:800;letter-spacing:.14em;color:#FFE9A6;text-shadow:0 2px 0 rgba(0,0,0,.28);}
+.cutin .cboss{margin-left:.5em;font-size:.62em;background:linear-gradient(100deg,#F25C7A,#FF8A5B);color:#fff;padding:.12em .6em;border-radius:999px;letter-spacing:.08em;vertical-align:middle;}
+.cutin .cname{font-size:clamp(24px,9vw,44px);font-weight:900;line-height:1.04;color:#fff;text-align:center;text-shadow:0 3px 0 rgba(242,92,122,.55),0 0 16px rgba(255,217,138,.85);}
+.cutin .cname .bnMain,.cutin .cname .bnPlus{display:inline-block;white-space:nowrap;}/* 「○○竜バハムート」は語中で折らず、+Nは塊で次行へ */
+.cutin .clv{color:#FFD98A;margin-right:.28em;}
+@keyframes cutinSlide{0%{transform:translateX(-115%);opacity:0;}16%{transform:translateX(0);opacity:1;}78%{transform:translateX(0);opacity:1;}100%{transform:translateX(118%);opacity:0;}}
+/* 長押し連打フィードバック(指の位置に「×N 連打中！」) */
+#holdFx{position:fixed;left:0;top:0;transform:translate(-50%,-50%);z-index:60;pointer-events:none;
+  background:linear-gradient(100deg,#FFD98A,#FF8A5B);color:#fff;font-weight:900;font-size:15px;
+  padding:5px 13px;border-radius:999px;box-shadow:0 4px 12px rgba(242,92,122,.4);white-space:nowrap;
+  opacity:0;transition:opacity .15s ease;text-shadow:0 1px 0 rgba(0,0,0,.15);}
+#holdFx.show{opacity:1;}
+#holdFx.pulse{animation:holdPop .18s ease-out;}
+@keyframes holdPop{0%{transform:translate(-50%,-50%) scale(.85);}55%{transform:translate(-50%,-50%) scale(1.2);}100%{transform:translate(-50%,-50%) scale(1);}}
+/* 長押し2秒のサークルタイマー(発動ディレイの進捗) */
+#holdRing{position:fixed;left:0;top:0;transform:translate(-50%,-50%);z-index:61;pointer-events:none;width:56px;height:56px;display:flex;align-items:center;justify-content:center;}
+#holdRing svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);}
+#holdRing .track{fill:rgba(91,58,102,.42);stroke:rgba(255,255,255,.45);stroke-width:5;}
+#holdRing .prog{fill:none;stroke:#FFD98A;stroke-width:5;stroke-linecap:round;stroke-dasharray:125.7;stroke-dashoffset:125.7;animation:holdRingFill 1s linear forwards;}
+#holdRing .hrIco{position:relative;font-size:19px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));}
+#holdRing .hrCap{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:6px;white-space:nowrap;font-size:11px;font-weight:800;color:#fff;background:rgba(91,58,102,.82);padding:3px 9px;border-radius:999px;box-shadow:0 2px 6px rgba(91,58,102,.35);}
+#holdRing.burst{animation:holdRingBurst .22s ease-out forwards;}
+@keyframes holdRingFill{to{stroke-dashoffset:0;}}
+@keyframes holdRingBurst{0%{transform:translate(-50%,-50%) scale(1);opacity:1;}100%{transform:translate(-50%,-50%) scale(1.7);opacity:0;}}
+/* クラスチェンジ発動の光る演出(押下位置に金色バースト＋星) */
+.ccGlow{position:fixed;left:0;top:0;transform:translate(-50%,-50%);z-index:62;pointer-events:none;width:130px;height:130px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,.95) 0%,rgba(255,233,166,.85) 28%,rgba(255,217,138,.6) 48%,rgba(255,138,91,0) 72%);
+  animation:ccGlowAnim .68s ease-out forwards;}
+.ccGlow .ccStar{position:absolute;left:50%;top:50%;font-size:38px;transform:translate(-50%,-50%);filter:drop-shadow(0 0 8px #FFD98A);animation:ccStarAnim .68s ease-out forwards;}
+@keyframes ccGlowAnim{0%{opacity:0;transform:translate(-50%,-50%) scale(.3);}25%{opacity:1;transform:translate(-50%,-50%) scale(1);}100%{opacity:0;transform:translate(-50%,-50%) scale(2);}}
+@keyframes ccStarAnim{0%{opacity:0;transform:translate(-50%,-50%) scale(.4) rotate(-30deg);}40%{opacity:1;transform:translate(-50%,-50%) scale(1.25) rotate(0);}100%{opacity:0;transform:translate(-50%,-50%) scale(1.7) rotate(25deg);}}
+.bubble{
+  max-width:84%;background:rgba(255,255,255,.95);border:2px solid var(--pink);
+  border-radius:16px;padding:6px 12px;font-size:12px;font-weight:700;
+  box-shadow:var(--shadow);animation:bubbleIn .3s ease-out, bubbleOut .4s ease-in 2.6s forwards;
+  display:flex;align-items:center;gap:7px;
+}
+.bubble .bname{font-weight:800;color:var(--rose);font-size:11px;flex:none;}
+.bubble .bmini{width:26px;height:26px;flex:none;}
+@keyframes bubbleIn{0%{transform:translateY(10px) scale(.8);opacity:0;}100%{transform:translateY(0) scale(1);opacity:1;}}
+@keyframes bubbleOut{to{transform:translateY(-8px);opacity:0;}}
+
+/* ============================================================
+   (d) パネル / タブ
+   ============================================================ */
+#tabs{
+  position:relative;z-index:5;
+  display:flex;gap:6px;margin:4px 8px 0;padding:5px;
+  background:rgba(255,255,255,.9);border:2px solid var(--pink);border-radius:var(--radius);
+}
+.tabBtn{
+  flex:1;padding:8px 4px;border-radius:14px;font-weight:800;font-size:12.5px;
+  color:var(--ink-soft);transition:all .15s;position:relative;
+}
+.tabBtn.active{color:var(--ink);background:#fff;box-shadow:var(--shadow);}
+.tabBtn.active::after{
+  content:"";position:absolute;left:22%;right:22%;bottom:3px;height:3px;border-radius:3px;
+  background:var(--gold-grad);background-size:100% 100%;
+}
+.tabBtn .glow{position:absolute;top:2px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);animation:pulseGlow 1s ease-in-out infinite;}
+@keyframes pulseGlow{0%,100%{transform:scale(.7);opacity:.6;}50%{transform:scale(1.2);opacity:1;}}
+
+#panel{
+  position:relative;z-index:5;
+  margin:6px 8px calc(8px + env(safe-area-inset-bottom));
+  background:var(--panel-bg);border:2px solid var(--pink);border-radius:var(--radius);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  box-shadow:var(--shadow);
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  min-height:0;   /* 高さはグリッドトラック(minmax(0,36dvh))が決定。短い画面では縮んでスクロール */
+  padding:8px;
+}
+.panelHead{font-weight:800;font-size:13px;margin:2px 4px 8px;color:var(--ink-soft);display:flex;align-items:center;gap:6px;}
+
+/* カード共通 */
+.card{
+  background:#fff;border-radius:var(--radius-sm);padding:9px 10px;margin-bottom:8px;
+  box-shadow:0 2px 8px rgba(91,58,102,.08);display:flex;align-items:center;gap:9px;
+}
+.cardBody{flex:1;min-width:0;}
+.cardTitle{font-weight:800;font-size:13.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.cardTitle .lv{font-size:11px;font-weight:800;color:#fff;background:var(--lav);padding:1px 7px;border-radius:9px;}
+.cardTitle .maxlv{background:var(--amber);}
+.cardDesc{font-size:10.5px;color:var(--ink-soft);margin-top:2px;line-height:1.35;}
+.cardEff{font-size:10.5px;color:var(--sky-deep);font-weight:700;margin-top:2px;}
+.roleIcon{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex:none;background:var(--pink-soft);}
+.buyBtn{
+  flex:none;min-width:84px;padding:9px 8px;border-radius:13px;font-weight:800;font-size:12px;
+  background:var(--gold-grad);background-size:200% 100%;color:#fff;
+  box-shadow:0 3px 8px rgba(242,92,122,.35);transition:transform .1s,filter .1s;
+  text-align:center;line-height:1.2;
+}
+.buyBtn:active{transform:scale(.94);}
+.buyAllBtn{display:block;width:calc(100% - 8px);margin:0 4px 8px;padding:11px;border-radius:14px;font-weight:800;font-size:13px;color:#fff;background:var(--gold-grad);background-size:200% 100%;box-shadow:0 3px 8px rgba(242,92,122,.35);transition:transform .1s;}
+.buyAllBtn:active{transform:translateY(1px) scale(.99);}
+.buyBtn.locked{background:#d9cfe0;color:#fff;box-shadow:none;cursor:not-allowed;filter:grayscale(.3);}
+.buyBtn .bc{display:flex;align-items:center;justify-content:center;gap:3px;font-size:11px;}
+.buyBtn .bc .gem{width:12px;height:12px;}
+.buyBtn small{display:block;font-size:9.5px;opacity:.9;font-weight:700;}
+
+.girlMini{width:48px;height:60px;flex:none;}
+.girlMini svg{display:block;width:100%;height:auto;}
+.locktag{font-size:10px;color:var(--ink-soft);font-weight:700;}
+
+/* 設定 */
+.setRow{display:flex;align-items:center;justify-content:space-between;padding:10px 6px;border-bottom:1px solid rgba(201,167,240,.25);}
+.setRow:last-child{border-bottom:none;}
+.setRow .lbl{font-weight:700;font-size:13px;}
+.setRow .sub{font-size:10px;color:var(--ink-soft);margin-top:2px;}
+.toggle{
+  width:48px;height:27px;border-radius:14px;background:#d9cfe0;position:relative;transition:background .2s;flex:none;
+}
+.toggle.on{background:var(--lav);}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.toggle.on::after{transform:translateX(21px);}
+.dangerBtn{width:100%;padding:12px;border-radius:14px;background:#fff;border:2px solid var(--rose);color:var(--rose);font-weight:800;font-size:13px;}
+.dangerBtn:active{transform:scale(.97);}
+.setLine{padding:10px 6px;font-size:11px;color:var(--ink-soft);line-height:1.5;}
+.recGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:2px 2px 10px;}
+.recCell{background:#fff;border:1.5px solid var(--pink);border-radius:12px;padding:7px 9px;}
+.recCell .k{font-size:10.5px;color:var(--ink-soft);font-weight:700;margin-bottom:1px;}
+.recCell .v{font-size:15px;font-weight:800;color:var(--ink);}
+.recHist{display:flex;flex-direction:column;gap:5px;}
+.recRow{display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid var(--pink);border-radius:10px;padding:6px 9px;font-size:12px;}
+.recRow .rt{color:var(--ink-soft);font-variant-numeric:tabular-nums;font-size:11px;min-width:60px;}
+.recRow .rs{font-weight:800;color:var(--ink);min-width:30px;}
+.recRow .rn{flex:1;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.recRow .rr{font-weight:800;color:#E0792B;white-space:nowrap;}
+.recRow.boss{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset;}
+
+/* ============================================================
+   (e) コンポーネント: トースト / モーダル
+   ============================================================ */
+#toastRoot{position:fixed;left:50%;bottom:calc(40dvh + 18px);transform:translateX(-50%);z-index:50;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:92%;max-width:440px;}
+.toast{
+  background:rgba(91,58,102,.92);color:#fff;padding:9px 16px;border-radius:16px;
+  font-size:12.5px;font-weight:700;box-shadow:var(--shadow-lg);text-align:center;
+  animation:toastIn .3s ease-out, toastOut .4s ease-in forwards;animation-delay:0s, var(--life);
+  max-width:100%;
+}
+.toast.warn{background:rgba(255,138,91,.95);}
+.toast.error{background:rgba(242,92,122,.95);}
+@keyframes toastIn{0%{transform:translateY(14px);opacity:0;}100%{transform:translateY(0);opacity:1;}}
+@keyframes toastOut{to{transform:translateY(-8px);opacity:0;}}
+
+#modalRoot{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(91,58,102,.4);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
+#modalRoot.show{display:flex;animation:fadeIn .2s;}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.modal{
+  background:linear-gradient(180deg,#fff,#FFF4FA);border:3px solid var(--pink);
+  border-radius:24px;padding:22px 20px;max-width:340px;width:100%;
+  box-shadow:var(--shadow-lg);text-align:center;animation:modalIn .35s cubic-bezier(.2,.8,.3,1.2);
+}
+@keyframes modalIn{from{transform:scale(.8) translateY(20px);opacity:0;}to{transform:scale(1) translateY(0);opacity:1;}}
+.modal h2{margin:0 0 8px;font-size:18px;font-weight:800;color:var(--rose);}
+.modal p{margin:6px 0;font-size:13px;line-height:1.6;}
+.modal .big{font-size:22px;font-weight:800;background:var(--gold-grad);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 2.4s linear infinite;display:inline-block;}
+.modalBtns{display:flex;gap:10px;margin-top:16px;}
+.modalBtns button{flex:1;padding:12px;border-radius:14px;font-weight:800;font-size:13px;}
+.mbtn-primary{background:var(--gold-grad);background-size:200% 100%;color:#fff;box-shadow:0 3px 8px rgba(242,92,122,.35);}
+.mbtn-primary:active{transform:scale(.95);}
+.mbtn-ghost{background:#fff;border:2px solid var(--lav);color:var(--ink);}
+.mbtn-ghost:active{transform:scale(.95);}
+
+/* オンボーディング */
+#onboard{position:fixed;inset:0;z-index:55;display:none;align-items:center;justify-content:center;pointer-events:none;}
+#onboard.show{display:flex;}
+.obBubble{
+  position:absolute;background:#fff;border:3px solid var(--gold);border-radius:18px;padding:12px 16px;
+  font-size:14px;font-weight:800;max-width:240px;text-align:center;box-shadow:var(--shadow-lg);
+  pointer-events:auto;color:var(--ink);
+}
+.obFinger{font-size:34px;animation:fingerPulse 1s ease-in-out infinite;display:inline-block;}
+@keyframes fingerPulse{0%,100%{transform:scale(1) translateY(0);}50%{transform:scale(1.15) translateY(-6px);}}
+.obSkip{margin-top:8px;font-size:11px;color:var(--ink-soft);text-decoration:underline;background:none;}
+
+/* 必殺ゲージ */
+#superBar{
+  position:relative;z-index:5;margin:0 8px;height:0;overflow:hidden;
+  transition:height .2s;
+}
+#superBar.active{height:34px;margin:2px 8px;}
+.superWrap{
+  position:relative;display:flex;align-items:center;gap:8px;height:34px;
+  background:var(--panel-bg);border:2px solid var(--lav);border-radius:14px;
+  padding:0 8px;overflow:hidden;
+}
+.superTrack{position:relative;flex:1;height:14px;border-radius:8px;background:rgba(201,167,240,.25);overflow:hidden;}
+.superFill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:8px;background:linear-gradient(90deg,#C9A7F0,#7E5BD6);transition:width .12s;}
+.superLbl{font-size:10.5px;font-weight:800;color:var(--lav-deep);flex:none;}
+#superBtn{
+  flex:none;padding:6px 12px;border-radius:11px;font-weight:800;font-size:12px;color:#fff;
+  background:var(--lav);box-shadow:0 2px 6px rgba(126,91,214,.4);transition:transform .1s,filter .15s;
+}
+#superBtn:active{transform:scale(.94);}
+#superBtn.ready{background:var(--gold-grad);background-size:200% 100%;animation:shimmer 1.4s linear infinite;}
+#superBtn:disabled{opacity:.55;filter:grayscale(.4);box-shadow:none;cursor:default;}
+
+/* ============================================================
+   (f)(g) アニメ無効 / reduced-motion
+   ============================================================ */
+.no-motion *{animation:none!important;transition:none!important;}
+/* スマホ縦(高さ900px以下=ブラウザUI込みの一般的なスマホ)は縦の余白を節約してパネル(操作領域)を広く */
+@media(max-height:900px){
+  #titleText{font-size:11px;}
+  #subTitle{display:none;}
+  #titleBar{padding:2px 10px calc(2px + env(safe-area-inset-bottom));}
+  #hud{margin:6px 6px 3px;padding:6px 10px;}
+  #app{grid-template-rows:auto minmax(clamp(140px,28dvh,240px),1fr) auto auto minmax(0,40dvh) auto;}
+}
+@media(max-height:680px){
+  #app{grid-template-rows:auto minmax(clamp(120px,27dvh,200px),1fr) auto auto minmax(0,34dvh) auto;}
+  #panel{min-height:0;}
+  #bossWrap{max-width:200px;width:min(46%,21dvh);}
+}
+/* 極端に低い時: 敵味方エリアを優先確保(下パネルが縮む) */
+@media(max-height:480px){
+  #app{grid-template-rows:auto minmax(116px,1fr) auto auto minmax(0,42dvh) auto;}
+}
+@media(min-width:481px){
+  #app{border-left:1px solid rgba(201,167,240,.4);border-right:1px solid rgba(201,167,240,.4);}
+}
+</style>
+</head>
+<body>
+<main id="app">
+  <div id="bgStars" aria-hidden="true"></div>
+
+  <!-- HUD -->
+  <header id="hud">
+    <div id="hudTop">
+      <div class="stageBlock">
+        <div class="stageLabel"><span id="stageLabel">STAGE 1</span><span id="bossTag" class="bossTag" style="display:none">BOSS</span></div>
+        <div class="stageProg"><div id="stageProgFill" style="width:0%"></div></div>
+      </div>
+      <div class="currBlock">
+        <div class="hhkRow">
+          <svg class="gem" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="gemg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFE9B0"/><stop offset=".5" stop-color="#FFD98A"/><stop offset="1" stop-color="#FF8A5B"/></linearGradient></defs><polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="url(#gemg)" stroke="#F25C7A" stroke-width="1.4" stroke-linejoin="round"/><polygon points="12,2 12,22 3,17 3,7" fill="#fff" opacity=".18"/></svg>
+          <span class="val" id="hhkVal">0</span>
+        </div>
+        <div class="dpsRow"><span id="dpsVal">DPS 0</span></div>
+      </div>
+      <button id="soundBtn" aria-label="音のON/OFF" aria-pressed="true">🔊</button>
+    </div>
+    <div id="hpWrap">
+      <div id="hpbar" role="progressbar" aria-label="バハムートのHP" aria-valuemin="0" aria-valuemax="100">
+        <div id="hpfill"></div>
+        <div id="hpText">8 / 8</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- バトル領域 -->
+  <section id="battle">
+    <div id="flashLayer" aria-hidden="true"></div>
+    <div id="bubbleLayer" aria-hidden="true"></div>
+    <div id="bossWrap" role="button" tabindex="0" aria-label="バハムートをタップして攻撃">
+      <div id="bossSvgRoot"></div>
+    </div>
+    <div id="partyRow" aria-hidden="true"></div>
+    <div id="fxLayer" aria-hidden="true"></div>
+    <div id="playerChar" aria-hidden="true"></div>
+    <div id="cutinLayer" aria-hidden="true"></div>
+  </section>
+
+  <div id="superBar"></div>
+
+  <!-- タブ -->
+  <nav id="tabs" role="tablist">
+    <button class="tabBtn active" id="tab-girls" data-tab="girls" role="tab" aria-selected="true" aria-controls="panel">仲間</button>
+    <button class="tabBtn" id="tab-upgrades" data-tab="upgrades" role="tab" aria-selected="false" aria-controls="panel">強化</button>
+    <button class="tabBtn" id="tab-prestige" data-tab="prestige" role="tab" aria-selected="false" aria-controls="panel">転生</button>
+    <button class="tabBtn" id="tab-records" data-tab="records" role="tab" aria-selected="false" aria-controls="panel">記録</button>
+    <button class="tabBtn" id="tab-settings" data-tab="settings" role="tab" aria-selected="false" aria-controls="panel">設定</button>
+  </nav>
+
+  <!-- パネル -->
+  <section id="panel" role="tabpanel" aria-labelledby="tab-girls"></section>
+
+  <!-- タイトル(画面下部) -->
+  <footer id="titleBar">
+    <span id="titleText">✨ ヒヒイロカネ・クリッカー</span>
+    <span id="subTitle">〜 バハムートの煌めき 〜</span>
+  </footer>
+
+  <div id="toastRoot" aria-live="polite"></div>
+</main>
+<div id="modalRoot"></div>
+<div id="onboard"></div>
+
+<script>
+(()=>{
+"use strict";
+/* =====================================================================
+   B1  CONFIG
+   ===================================================================== */
+const SAVE_KEY="hihiiro_clicker_save_test_v1";
+const SAVE_KEY_BACKUP="hihiiro_clicker_save_test_v1_bak";
+const VERSION=8;
+const BUILD="820275db1d91";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
+const AUTOSAVE_MS=10000;
+const SAVE_MIN_GAP_MS=2000;
+const TICK_MS=100;
+const AUTO_DMG_MS=320;   // 自動DPSダメージ数字の表示間隔(蓄積を間引いて表示)
+const OFFLINE_CAP_MS=8*60*60*1000; // 8h
+const HARD_CAP=Number.MAX_VALUE/1e10; // ≈1.8e298
+const MAX_DMG_NUMS=26;
+const MAX_PARTICLES=150;
+
+// 強化(ショップ) — 設計の upgrades 全て
+const UPGRADES=[
+  {id:"tapPower",  name:"鋼の一撃",   icon:"⚔️", desc:"タップ1回あたりのダメージを底上げする。序盤の生命線。", baseCost:15,  growth:1.15, max:null,
+    eff:lv=>`タップ +${lv*2} (現在の素ダメージ ${1+lv*2})`},
+  {id:"critChance",name:"鋭利な刃",   icon:"🗡️", desc:"クリティカル発生率を上げる。気持ちよさ担当。",       baseCost:60,  growth:1.22, max:55,
+    eff:lv=>`クリ率 ${(5+lv).toFixed(0)}% (基本5%+${lv}%)`},
+  {id:"critDamage",name:"会心の極み", icon:"💥", desc:"クリティカル時の倍率を強化。一撃の爆発力UP。",       baseCost:120, growth:1.25, max:null,
+    eff:lv=>`クリ倍率 ×${(2+lv*0.25).toFixed(2)}`},
+  {id:"partyDps",  name:"号令の旗",   icon:"🚩", desc:"仲間全員の自動DPSをまとめて強化する。放置効率の要。", baseCost:200, growth:1.2,  max:null,
+    eff:lv=>`総DPS +${(lv*8)}% (×${(1+lv*0.08).toFixed(2)})`},
+  {id:"goldGain",  name:"霊金の祝福", icon:"✨", desc:"バハムート撃破で得るヒヒイロカネ獲得量を増やす。",   baseCost:250, growth:1.18, max:null,
+    eff:lv=>`撃破報酬 +${lv*10}% (×${(1+lv*0.1).toFixed(2)})`},
+  {id:"autoClick", name:"自動の腕輪", icon:"🌀", desc:"毎秒、自動でタップを発生させる。完全放置を後押し。",  baseCost:500, growth:1.28, max:20,
+    eff:lv=>`毎秒 自動タップ ×${lv}（放置DPS +${lv*5}%相当）`},
+];
+const UPG_BY_ID={};UPGRADES.forEach(u=>UPG_BY_ID[u.id]=u);
+
+// 仲間(女の子) — アート設計準拠
+const GIRLS=[
+  {id:"sakura_kenshi", name:"さくらん", title:"桜花の一閃・先鋒剣士", role:"剣", roleIcon:"⚔️",
+   recruit:20,    baseDps:8,    lvBase:64,    palette:["#FBBFD6","#FFE0CF","#F25C7A","#FFD3E4"]},
+  {id:"runaria_mahou", name:"るなりあ", title:"月詠みの大魔女・範囲術師", role:"魔", roleIcon:"🔮",
+   recruit:120,   baseDps:12,   lvBase:96,    palette:["#C9A7F0","#FFE9DC","#7E5BD6","#E0CBF7"]},
+  {id:"yumiri_kyuu",   name:"ゆみり",   title:"星詠みの狙撃手・連射弓兵", role:"弓", roleIcon:"🏹",
+   recruit:600,   baseDps:12,   lvBase:96,    palette:["#A7E2F2","#FFE0CF","#2C8FB0","#CFF0F8"]},
+  {id:"merry_kaifuku", name:"めりぃ",   title:"祈りの聖灯・癒し手", role:"癒", roleIcon:"💗",
+   recruit:3000,  baseDps:18,   lvBase:144,   palette:["#FFD98A","#FFE9DC","#FFB347","#FFE9B0"]},
+  {id:"komugi_dageki", name:"こむぎ",   title:"豪天の小さき拳・打撃姫", role:"打", roleIcon:"👊",
+   recruit:12000, baseDps:22,   lvBase:176,   palette:["#FF8A5B","#FFE0CF","#E0532C","#FFB089"]},
+  {id:"sora_shien",    name:"そら",     title:"虹彩の歌い手・支援者", role:"支", roleIcon:"🎵",
+   recruit:60000, baseDps:28,   lvBase:224,   palette:["#7FD8E8","#FFE9DC","#5B8FE0","#C2EEF5"]},
+];
+const GIRL_BY_ID={};GIRLS.forEach(g=>GIRL_BY_ID[g.id]=g);
+// 加入解放ステージ(到達最高)
+const RECRUIT_STAGE=[1,6,12,20,30,42];
+// ===== 仲間バランス: 線形成長 + クラスチェンジ(段位) =====
+const LCAP=25;                     // 段位内レベル上限(=長押し連打が必ずここで止まる)
+const NCLASS=5;                    // 段位数 tier 0..4(=4回クラスチェンジ)
+const DPS_SLOPE=0.12;              // レベルあたりDPS線形増分(段内 L1→L25 で約3.88倍)
+const CLASSMULT=[1,4,16,64,256];   // 段位倍率(×4/段 > 段内3.88倍 ⇒ クラスチェンジは常に純増。DPS/コスト共通)
+const COST_C1=1.0, COST_C2=0.5;    // レベルコスト2次式: lvBase*CM*(C1*L+C2*L^2)
+const CC_BASE=[640,960,960,1440,1760,2240]; // クラスチェンジ基準コスト(仲間index, 戦力比に整合)
+const CC_GROWTH=5.0;               // クラスチェンジコストの段倍率
+const CC_STAGE=[9,14,20,28,38,50]; // 初回CC解放stage(仲間index)
+const CC_STEP=18;                  // 段位+1ごとに必要到達stage +18(昇段をラン全体へ分散=即マックス防止)
+// 転生: コア=生涯獲得ヒヒの桁数(指数換算の小さい整数)、倍率=PRES_FACTOR^コア(指数ボーナス)
+const PRES_LOG0=5, PRES_FACTOR=4;   // LOG0=5: 初コア=生涯獲得10^5.1(≈stage52) → 「ステージ50で解放」の看板と実態を一致
+// 竜核は生涯獲得1桁=10個(10個で×PRES_FACTOR)。粒度10倍で壁際でもカウンタが動き続ける(総量・強さは1桁=×4のまま不変)
+function prestigeMult(){ return powB(PRES_FACTOR,(((state.prestige&&state.prestige.cores)||0))/10); }   // Big(×4^(cores/10), 無制限)
+// 生涯獲得ヒヒ(転生をまたいで累積)から得られる総コア(1桁=10個)
+function coresFromLife(life){ const L=(life instanceof Big)?life.log10():(life>0?Math.log10(life):-Infinity); return (isFinite(L)&&L>PRES_LOG0)?Math.floor((L-PRES_LOG0)*10):0; }
+const CLASS_TITLES={
+  sakura_kenshi:["先鋒剣士","桜花剣聖","緋天剣神","千桜の極","天斬・絶"],
+  runaria_mahou:["範囲術師","月詠大魔女","星海の賢者","虚空術皇","万象・理"],
+  yumiri_kyuu:["連射弓兵","星詠狙撃手","風穿つ射手","天弓の達人","流星・絶"],
+  merry_kaifuku:["癒し手","聖灯の巫女","祈聖アルカ","慈光の聖女","神癒・極"],
+  komugi_dageki:["打撃姫","豪天拳士","破山の闘姫","金剛の極","震天・絶"],
+  sora_shien:["支援者","虹彩の歌姫","天鳴のディーヴァ","幻奏の女王","神律・極"],
+};
+
+// ボイス
+const VOICES={
+ sakura_kenshi:{recruit:["さくらん、ただいま参上ッ！先陣はあたしに任せて！","えへへ、よろしくね…って、ちゃんと頼っていいんだからね？"],tap:["よーし、いっくよー！せやーっ！","そこっ！見切ったぁ！"],levelup:["うわっ、力が湧いてきた！もっと強くなれる気がする！"],defeat:["やったやった！見てたー？今の一閃、かっこよかったでしょ！"],stageup:["次のステージ！ふふっ、腕が鳴るってこういうことだね！"]},
+ runaria_mahou:{recruit:["るなりあ…でしゅ…んん、よろしくね…ふぁ…","おしごと？いいよぉ…でも、おひるねの時間は守ってねぇ"],tap:["ぴゅーん…ほぁ、星屑よ、はじけて…","えいっ…とぉ。あたった？よかったぁ"],levelup:["まりょく、ふえたみたい…ねむくないとき限定だけどね"],defeat:["ふぅ…おわり？じゃあ…おやすみなさぁい…むにゃ"],stageup:["つぎのおそら…星が、いっぱいだねぇ…きれい…"]},
+ yumiri_kyuu:{recruit:["ゆみり。…腕は確かよ。足を引っ張らないで。","別に、群れたいわけじゃない。…でも、悪くないかもね。"],tap:["狙い、定めた。——外さない。","ふっ。次。"],levelup:["…精度が上がった。これなら、もっと遠くまで届く。"],defeat:["終わり。…ま、こんなものよ。褒めてもいいけど?"],stageup:["新しい射程ね。風向きも読めてる。問題ないわ。"]},
+ merry_kaifuku:{recruit:["わぁ…めりぃ、です♪ みんなのこと、ぜんぶ癒しちゃいますね！","えへへ…あっ、つまずいた…だ、大丈夫です、元気ですっ！"],tap:["ふわぁ…あったかい光、とどけ〜!","だいじょうぶ、わたしがついてますよ♪"],levelup:["光がもっと大きく…！みんなを守れる力、ふえました!"],defeat:["やったぁ…！けが、ないですか？…よかったぁ、ほっ。"],stageup:["次の場所…ちょっとこわいけど、みんなとなら平気です!"]},
+ komugi_dageki:{recruit:["こむぎだ!腹減ってる時のあたしは…最強だぞっ!ぐぅ〜","なかま!?やったー!後でみんなで団子食べよーぜ!"],tap:["おりゃおりゃおりゃーっ!ぶっ飛べー!","でやーっ!…あれ、もう一発いっとく?"],levelup:["うおおお力がみなぎる!これでもっとデカいの殴れる!"],defeat:["勝ったどー!よっしゃ、ごほうびの団子ーっ!いっただきまーす!"],stageup:["おっ、新しいとこ!でっかい敵いるかな?腕が鳴るぜ!"]},
+ sora_shien:{recruit:["ごきげんよう。わたくし、そら。…ふふ、あなたを勝たせてさしあげる。","あら、いい目をしているのね。…このわたくしが、見込んであげましょう?"],tap:["さあ、声を合わせて。…みんなの力が、輝きだすわ♪","その調子。ふふっ、悪くないわね。"],levelup:["わたくしの歌が、より遠くへ。…さあ、みんなを高みへ導くわ。"],defeat:["おみごと。…全部、わたくしの采配どおり。ふふっ、当然でしょう?"],stageup:["あら、新たな舞台。…ちょうどいいわ、わたくしの歌い甲斐があるというもの。"]},
+};
+
+/* =====================================================================
+   B2  STATE
+   ===================================================================== */
+var _ffNow=0, _ffQuiet=false;   // B14 VERIFY: 仮想クロック(0=実時間)/検証中の演出・保存ミュート。varはD初期化前のnowMs呼び出しでも安全
+function nowMs(){return _ffNow||Date.now();}
+function newState(){
+  const t=nowMs();
+  return {
+    version:VERSION, createdAt:t, lastSeen:t,
+    stage:{index:1, highest:1, killsThisStage:0},
+    bahamut:{hp:8, maxHp:8, isBoss:false, tier:0},
+    hihiirokane:0, totalEarned:0,
+    upgrades:{tapPower:0,critChance:0,critDamage:0,partyDps:0,goldGain:0,autoClick:0},
+    girls:{}, // id -> {owned,level}
+    prestige:{cores:0, lifeEarned:0, count:0, grit:0},   // grit=ふんばり(新規ゾーンでの戦闘時間, 180秒=1桁。竜核のもとに乗算、転生でリセット)
+    super:{charge:0, max:30}, // 必殺ゲージ(タップ30回で満タン)
+    settings:{sound:true, bgm:true, motion:true, motionUserSet:false, haptics:true, damageNumbers:true},
+    stats:{totalTaps:0, totalCrits:0, bahamutDefeated:0, playTimeMs:0, recentKills:[], bestStage:1, totalEarnedAll:0},   // bestStage=通算最高到達(転生で保持) / totalEarnedAll=本当の総獲得(Big, 登り直し分も含む。竜核用のlifeEarnedとは別物)
+    onboard:{tapDone:false, shopHinted:false, recruitHinted:false, idleHinted:false, done:false},
+  };
+}
+let state=newState();
+
+// ランタイム(セーブ対象外)
+const D={dps:0, tapDmg:1, goldMult:1, dirtyHUD:true, dirtyPanel:true, lastTickAt:nowMs(),
+  shake:0, shakeT:0, saveDirty:false, lastSaveAt:0, audioReady:false, audioCtx:null,
+  idleSince:nowMs()};
+
+/* =====================================================================
+   B3  UTIL
+   ===================================================================== */
+function clamp(v,lo,hi){if(!Number.isFinite(v))return lo;return v<lo?lo:(v>hi?hi:v);}
+function capNum(v){if(!Number.isFinite(v))return v>0?HARD_CAP:0;return v>HARD_CAP?HARD_CAP:v;}
+
+/* ===== 大数(仮数部+指数)型 Big: floatの上限(~1.8e308)を超える値を扱う。値は非負前提(HP/報酬/DPS/所持ヒヒ等)。
+   m∈[1,10)(0なら m=0)、e は通常のJS数値(指数。事実上無制限)。乗算=指数加算で巨大値も保持。 ===== */
+function Bg(x){ if(x instanceof Big) return x; if(x&&typeof x==="object"&&("m" in x)) return Big._n((+x.m)||0,(+x.e)||0); return Big.from(x); }   // {m,e}(保存復元)も受理
+class Big{
+  constructor(m,e){ this.m=m; this.e=e; }
+  static from(n){ if(n instanceof Big) return n; n=+n; if(!(n>0)) return new Big(0,0); if(!isFinite(n)) return new Big(1,1e308); const e=Math.floor(Math.log10(n)); return new Big(n/Math.pow(10,e), e); }
+  static _n(m,e){ if(!(m>0)||!isFinite(m)) return new Big(0,0); if(!isFinite(e)) return new Big(1,1e308); const d=Math.floor(Math.log10(m)); return new Big(m/Math.pow(10,d), e+d); }
+  static log(L){ if(!isFinite(L)) return L>0?new Big(1,1e308):new Big(0,0); const e=Math.floor(L); return new Big(Math.pow(10,L-e), e); }   // = 10^L
+  add(x){ let a=this,b=Bg(x); if(a.m===0)return b; if(b.m===0)return a; if(a.e<b.e){const t=a;a=b;b=t;} const d=a.e-b.e; if(d>16)return a; return Big._n(a.m+b.m*Math.pow(10,-d), a.e); }
+  sub(x){ const a=this,b=Bg(x); if(b.m===0)return a; if(a.m===0)return new Big(0,0); const d=a.e-b.e; if(d<0)return new Big(0,0); if(d>16)return a; const m=a.m-b.m*Math.pow(10,-d); if(m<=1e-12)return new Big(0,0); return Big._n(m,a.e); }
+  mul(x){ const b=Bg(x); if(this.m===0||b.m===0)return new Big(0,0); return Big._n(this.m*b.m, this.e+b.e); }
+  div(x){ const b=Bg(x); if(this.m===0)return new Big(0,0); if(b.m===0)return new Big(1,1e308); return Big._n(this.m/b.m, this.e-b.e); }
+  pow(p){ if(this.m===0)return p===0?new Big(1,0):new Big(0,0); return Big.log(p*this.log10()); }
+  cmp(x){ const b=Bg(x); if(this.m===0&&b.m===0)return 0; if(this.m===0)return -1; if(b.m===0)return 1; if(this.e!==b.e)return this.e<b.e?-1:1; return this.m<b.m?-1:(this.m>b.m?1:0); }
+  gte(x){return this.cmp(x)>=0;} gt(x){return this.cmp(x)>0;} lte(x){return this.cmp(x)<=0;} lt(x){return this.cmp(x)<0;}
+  max(x){const b=Bg(x);return this.cmp(b)>=0?this:b;}
+  floor(){ if(this.m===0||this.e>=15)return this; return Big.from(Math.floor(this.toNumber())); }
+  toNumber(){ if(this.m===0)return 0; if(this.e>308)return Infinity; if(this.e<-323)return 0; return this.m*Math.pow(10,this.e); }
+  log10(){ return this.m===0?-Infinity:(Math.log10(this.m)+this.e); }
+  isZero(){ return this.m===0; }
+  toJSON(){ return {m:this.m,e:this.e}; }
+}
+function powB(base,p){ return base>0 ? Big.log(p*Math.log10(base)) : new Big(0,0); }   // base(number)^p → Big
+function toBig(v){ if(v instanceof Big) return v; if(v&&typeof v==="object"&&("m" in v)) return Big._n((+v.m)||0,(+v.e)||0); return Big.from((+v)||0); }
+const BIG0=new Big(0,0), BIG1=new Big(1,0);
+
+// 日本語の万進単位(万〜無量大数=10^68)。大きい順に並べ、最初に一致した単位を採用。
+const JP_UNITS=[
+  {v:1e68,s:"無量大数"},{v:1e64,s:"不可思議"},{v:1e60,s:"那由他"},{v:1e56,s:"阿僧祇"},
+  {v:1e52,s:"恒河沙"},{v:1e48,s:"極"},{v:1e44,s:"載"},{v:1e40,s:"正"},
+  {v:1e36,s:"澗"},{v:1e32,s:"溝"},{v:1e28,s:"穣"},{v:1e24,s:"杼"},
+  {v:1e20,s:"垓"},{v:1e16,s:"京"},{v:1e12,s:"兆"},{v:1e8,s:"億"},{v:1e4,s:"万"}
+];
+const EN_UNITS=[ {v:1e15,s:"Qa"},{v:1e12,s:"T"},{v:1e9,s:"B"},{v:1e6,s:"M"},{v:1e3,s:"K"} ];
+// <1e72 を通常の万進単位で(無量大数まで)。n は通常number(非負)。
+function fmtSmall(n){
+  if(n<1000) return (n<10&&n%1!==0)?n.toFixed(1):String(Math.floor(n));
+  if(n<1e4) return String(Math.floor(n));
+  for(const x of JP_UNITS){ if(n>=x.v){ const r=n/x.v; return (r<100?r.toFixed(2):r.toFixed(1)).replace(/\.?0+$/,"")+x.s; } }
+  return String(Math.floor(n));
+}
+// >=1e72: 「残り × (無量大数)^E」を入れ子の無表記で。L=log10(値)。E自体が大きいと再帰して「無無…」。
+function fmtMu(L){
+  const E=Math.floor(L/68), cL=L-68*E;          // E=無量大数の冪数, cL=残りのlog10([0,68))
+  const cStr=(cL<1e-6)?"":fmtSmall(Math.pow(10,cL))+" ";   // 残りが1なら省略
+  const eStr=(E<1e68)? fmtSmall(E)+"無" : fmtMu(Math.log10(E))+"無";  // 冪数が無量大数以上なら入れ子→無無
+  return cStr+eStr;
+}
+function formatNumber(x){
+  if(x==null) return "0";
+  if(typeof x==="object" && !(x instanceof Big) && ("m" in x)) x=toBig(x);   // 保存復元した{m,e}(討伐履歴の報酬等)もそのまま表示
+  const isB=(x instanceof Big);
+  if(!isB){ if(Number.isNaN(x)) return "0"; if(!Number.isFinite(x)) return "∞"; }
+  let neg=false, L;
+  if(isB){ if(x.isZero()) return "0"; L=x.log10(); }
+  else { neg=x<0; x=Math.abs(x); if(x===0) return "0"; L=Math.log10(x); }
+  let out;
+  if(L<72){ out=fmtSmall(isB?x.toNumber():x); }   // <1e72: 通常表記(無量大数まで)
+  else { out=fmtMu(L); }                          // 以降: 無入れ子表記(無限)
+  return neg?"-"+out:out;
+}
+function randAngle(){return Math.random()*Math.PI*2;}
+
+const safeJSON={
+  parse(s){try{return JSON.parse(s);}catch(e){return null;}},
+  stringify(o){try{return JSON.stringify(o,(k,v)=>k==="_"||k.startsWith("_")?undefined:v);}catch(e){return "";}}
+};
+
+// 数式 (HP/報酬は Big。コストは小さいので Number のまま=比較/減算でBigへ自動coerce)
+function bahamutHp(stage){
+  let hp=Bg(8).mul(powB(1.13,stage-1));
+  if(stage%5===0) hp=hp.mul(3);
+  return hp.floor();
+}
+function isBossStage(stage){return stage%5===0;}
+function rewardFor(stage){
+  const gainLv=state.upgrades.goldGain||0;
+  let r=Bg(6).mul(powB(1.15,stage-1)).mul(1+gainLv*0.10).mul(prestigeMult());
+  if(stage%5===0) r=r.mul(2);
+  return r.floor();
+}
+function costOf(kind,id,level,tier){
+  if(kind==="upgrade"){const u=UPG_BY_ID[id];if(!u)return Infinity;if(u.max!=null&&level>=u.max)return Infinity;if(level<0)return Infinity;return Bg(u.baseCost).mul(powB(u.growth,level)).floor();}  // Big: 上限なし強化はlevelで指数増 → Math.powのfloat上限(∞化)を回避
+  // 仲間レベル: 段位内2次コスト(線形DPS×2次コストで連打は必ず失速)。L>=LCAP は Infinity(=長押し停止/クラスチェンジ待ち)
+  const g=GIRL_BY_ID[id]; if(!g)return Infinity;
+  if(level<0||level>=LCAP) return Infinity;
+  const T=tier||0;
+  return Math.floor(g.lvBase*CLASSMULT[T]*(COST_C1*level+COST_C2*level*level));
+}
+// 累積コスト(等比級数) levelから count 回
+function cumulativeCost(base,growth,fromLv,count){
+  // Σ_{i=fromLv}^{fromLv+count-1} floor(base*growth^i) ≈ base*growth^fromLv*(growth^count-1)/(growth-1)
+  const first=base*Math.pow(growth,fromLv);
+  const sum=first*(Math.pow(growth,count)-1)/(growth-1);
+  return Math.floor(sum);
+}
+
+/* =====================================================================
+   B4  PERSIST
+   ===================================================================== */
+function load(){
+  let raw=null;
+  try{ const s=localStorage.getItem(SAVE_KEY); if(s) raw=safeJSON.parse(s); }catch(e){raw=null;}
+  if(!raw||typeof raw!=="object"){
+    try{ const b=localStorage.getItem(SAVE_KEY_BACKUP); if(b) raw=safeJSON.parse(b); }catch(e){raw=null;}
+  }
+  if(!raw||typeof raw!=="object") return newState();
+  try{ return migrate(raw); }catch(e){ return newState(); }
+}
+function deepMergeDefaults(target,defaults){
+  for(const k in defaults){
+    if(defaults[k]&&typeof defaults[k]==="object"&&!Array.isArray(defaults[k])){
+      if(typeof target[k]!=="object"||target[k]==null) target[k]={};
+      deepMergeDefaults(target[k],defaults[k]);
+    } else if(!(k in target)){
+      target[k]=defaults[k];
+    }
+  }
+  return target;
+}
+function sanitizeNum(v,def){return Number.isFinite(v)?v:def;}
+function migrate(raw){
+  let v=Number(raw.version)||1;
+  // 旧バージョン差分はここで段階処理(将来用)
+  if(v<2){ if(!raw.prestige) raw.prestige={cores:0,lifeEarned:0,count:0}; v=2; }
+  if(v<3){ if(!raw.settings) raw.settings={}; if(raw.settings.motion===undefined) raw.settings.motion=true; v=3; }
+  if(v<4){ if(!raw.settings) raw.settings={}; raw.settings.bgm=true; v=4; } // BGM追加: 既存セーブもONで体験
+  if(v<5){ // クラスチェンジ導入: tier付与。旧式(指数・level上限なし)のlevel>LCAPはtierへ換算しDPS急落を緩和
+    if(raw.girls&&typeof raw.girls==="object"){
+      for(const id in raw.girls){ const cur=raw.girls[id]; if(!cur||cur.tier!==undefined) continue;
+        const lv=Math.max(1,Math.floor(sanitizeNum(cur.level,1)));
+        if(lv>LCAP){ cur.tier=Math.min(NCLASS-1,Math.floor((lv-1)/LCAP)); cur.level=((lv-1)%LCAP)+1; }
+        else cur.tier=0;
+      }
+    }
+    v=5;
+  }
+  if(v<6){ // 転生を加算式(mult)→指数式(cores=桁数, 倍率×PRES_FACTOR^cores)へ。旧mult(最大~200)の実効倍率×(1+mult)を保存
+    if(raw.prestige){
+      const oldMult=Math.max(0,sanitizeNum(raw.prestige.mult,0));
+      const nc=Math.max(0,Math.ceil(Math.log(1+oldMult)/Math.log(PRES_FACTOR)));  // ×PRES_FACTOR^nc ≥ 1+oldMult(切り上げ=旧プレイヤー有利)
+      raw.prestige.cores=nc;
+      raw.prestige.lifeEarned=Math.pow(10,nc+PRES_LOG0);   // 以降の桁数計算が nc を再現
+      delete raw.prestige.mult;
+    }
+    v=6;
+  }
+  if(v<8){ // 竜核の粒度を10倍(1桁=10個, 10個で×4)へ。既存コアは×10で等価変換(強さ不変)
+    if(raw.prestige) raw.prestige.cores=Math.max(0,Math.floor(sanitizeNum(raw.prestige.cores,0)))*10;
+    v=8;
+  }
+  // 既定値で欠損補完
+  const base=newState();
+  deepMergeDefaults(raw,base);
+  // upgrades 正規化(既知idのみ)
+  const upg={};for(const u of UPGRADES){upg[u.id]=Math.max(0,Math.floor(sanitizeNum(raw.upgrades[u.id],0)));}
+  raw.upgrades=upg;
+  // girls 正規化
+  const girls={};for(const g of GIRLS){const cur=raw.girls&&raw.girls[g.id];if(cur&&cur.owned){girls[g.id]={owned:true,level:clamp(Math.floor(sanitizeNum(cur.level,1)),1,LCAP),tier:clamp(Math.floor(sanitizeNum(cur.tier,0)),0,NCLASS-1)};}}
+  raw.girls=girls;
+  // 大数フィールドは Big へ(旧Numberセーブ/新{m,e}セーブ両対応)
+  raw.hihiirokane=toBig(raw.hihiirokane);
+  raw.totalEarned=toBig(raw.totalEarned);
+  raw.prestige.lifeEarned=toBig(raw.prestige.lifeEarned);
+  raw.prestige.cores=Math.max(0,Math.floor(sanitizeNum(raw.prestige.cores,0)));
+  raw.prestige.count=Math.max(0,Math.floor(sanitizeNum(raw.prestige.count,0)));
+  raw.prestige.grit=Math.max(0,sanitizeNum(raw.prestige.grit,0));
+  // 必殺ゲージ sanitize
+  if(!raw.super||typeof raw.super!=="object") raw.super={charge:0,max:30};
+  raw.super.max=Math.max(1,Math.floor(sanitizeNum(raw.super.max,30)));
+  raw.super.charge=clamp(Math.floor(sanitizeNum(raw.super.charge,0)),0,raw.super.max);
+  raw.stage.index=Math.max(1,Math.floor(sanitizeNum(raw.stage.index,1)));
+  raw.stage.highest=Math.max(raw.stage.index,Math.floor(sanitizeNum(raw.stage.highest,1)));
+  // 通算最高到達: 旧セーブは現在の到達最高で初期化(以後は転生で保持)
+  if(!raw.stats||typeof raw.stats!=="object") raw.stats={};
+  raw.stats.bestStage=Math.max(Math.floor(sanitizeNum(raw.stats.bestStage,1)), raw.stage.highest);
+  // 本当の総獲得(Big): 旧セーブには無い(=0)ので、少なくとも生涯獲得(竜核用)以上として初期化
+  raw.stats.totalEarnedAll=toBig(raw.stats.totalEarnedAll||0).max(toBig(raw.prestige.lifeEarned).add(raw.totalEarned));
+  raw.lastSeen=sanitizeNum(raw.lastSeen,nowMs());
+  raw.version=VERSION;
+  return raw;
+}
+function save(reason){
+  if(_ffQuiet) return false;   // 検証早送り中は保存しない(実セーブ保護＋高速化)
+  const t=nowMs();
+  // throttle: forceでなければ最短間隔を守る(連打/頻発対策)
+  if(reason!=="force" && t-D.lastSaveAt<SAVE_MIN_GAP_MS) return false;
+  try{
+    state.lastSeen=t;
+    const json=safeJSON.stringify(state);
+    if(!json) throw new Error("stringify failed");
+    // バックアップ世代
+    try{const prev=localStorage.getItem(SAVE_KEY);if(prev)localStorage.setItem(SAVE_KEY_BACKUP,prev);}catch(e){}
+    localStorage.setItem(SAVE_KEY,json);
+    D.saveDirty=false; D.lastSaveAt=t;
+    return true;
+  }catch(e){
+    toast("保存に失敗しました(容量/権限)",{type:"warn"});
+    return false;
+  }
+}
+// ===== オフライン一括計算用の等比和(閉形式, Big) =====
+// Σ_{i=a}^{a+k-1} r^(i-1)
+function geoSumB(r,a,k){ if(k<=0) return BIG0; return powB(r,a-1).mul(powB(r,k).sub(1)).div(r-1); }
+// 範囲 [a, a+k-1] 内のボスstage(5の倍数)だけの Σ r^(i-1)
+function bossGeoSumB(r,a,k){
+  if(k<=0) return BIG0;
+  const b0=a+((5-(a%5))%5), last=a+k-1;
+  if(b0>last) return BIG0;
+  const nb=Math.floor((last-b0)/5)+1, r5=Math.pow(r,5);
+  return powB(r,b0-1).mul(powB(r5,nb).sub(1)).div(r5-1);
+}
+// stage a から k体ぶんの合計HP / 合計報酬(ボス補正込み。stage毎のfloorは省略=誤差は1体あたり1未満)
+function hpSumB(a,k){ return geoSumB(1.13,a,k).add(bossGeoSumB(1.13,a,k).mul(2)).mul(8); }
+function rewardSumB(a,k){ const g=1+(state.upgrades.goldGain||0)*0.10;
+  return geoSumB(1.15,a,k).add(bossGeoSumB(1.15,a,k)).mul(6*g).mul(prestigeMult()); }
+
+function applyOfflineProgress(now){
+  let elapsed=now-state.lastSeen;
+  if(!Number.isFinite(elapsed)||elapsed<0) elapsed=0;
+  elapsed=Math.min(elapsed,OFFLINE_CAP_MS);
+  if(elapsed<60000) return {elapsedMs:elapsed,goldGained:BIG0,kills:0,stagesGained:0,gritGained:0}; // 1分未満は無視
+  const dps=Bg(D.dps);
+  if(dps.isZero()) return {elapsedMs:elapsed,goldGained:BIG0,kills:0,stagesGained:0,gritGained:0};
+  // オンラインと同じ制約で一括処理: 撃破数は「登り直し上限(√best)×時間」、ダメージは「DPS×時間」の予算。
+  // 閉形式(等比和)なのでループ回数上限が無い(旧実装のMAX_STEPS=20万体打ち切りが「オフラインだと一定以上貯まらない」の原因だった)
+  const elapsedSec=elapsed/1000;
+  const rate=rushKillBase()/(AUTO_DMG_MS/1000);       // 撃破数/秒の上限(オンラインの自動周期と同一)
+  const quota=Math.floor(elapsedSec*rate);
+  let budget=dps.mul(elapsedSec);                      // 総ダメージ予算 Big
+  const grit0=state.prestige.grit||0;
+  const best0=state.stats.bestStage||0;
+  const startStage=state.stage.index;
+  let gold=BIG0, credit=BIG0, kills=0, nzSec=0;
+  let curHp=state.bahamut.hp;                          // 進行中ボスの残HPから充当
+  if(!(curHp instanceof Big)||curHp.isZero()) curHp=bahamutHp(startStage);
+  if(budget.lt(curHp)){
+    // 1体も倒せない: 削るだけ。新規ゾーンならその時間はふんばりに積もる
+    state.bahamut.hp=curHp.sub(budget);
+    if(startStage>best0) nzSec=elapsedSec;
+  } else {
+    budget=budget.sub(curHp);
+    const rw0=rewardFor(startStage);
+    gold=gold.add(rw0);
+    if(startStage>best0) credit=credit.add(rw0);
+    kills=1;
+    // 2体目以降(stage a〜)を二分探索: 予算内で倒せる最大数(撃破数上限quotaの範囲で)
+    const a=startStage+1;
+    let lo=0, hi=Math.max(0,quota-1);
+    while(lo<hi){ const mid=(lo+hi+1)>>1; if(hpSumB(a,mid).lte(budget)) lo=mid; else hi=mid-1; }
+    const k=lo;
+    if(k>0){
+      gold=gold.add(rewardSumB(a,k));
+      const cf=Math.max(a,best0+1), ce=a+k-1;          // 新規ゾーン(通算best超え)ぶんだけコアの元に加算
+      if(ce>=cf) credit=credit.add(rewardSumB(cf,ce-cf+1));
+      kills+=k;
+    }
+    const endS=(k>0)?(a+k-1):startStage;               // 最後に倒したstage
+    state.stage.index=endS+1;
+    if(state.stage.index>state.stage.highest) state.stage.highest=state.stage.index;
+    if(endS>best0) state.stats.bestStage=endS;
+    // 次ボスHP: 撃破数律速なら満タン(オンライン同様に余剰ダメージは持ち越さない)、ダメージ律速なら削り残しを反映
+    const nextHp=bahamutHp(state.stage.index);
+    if(kills>=quota){ state.bahamut.hp=nextHp; }
+    else {
+      const leftover=budget.sub(hpSumB(a,k));
+      const rem=nextHp.sub(leftover);
+      state.bahamut.hp=rem.isZero()?Bg(1):rem;
+    }
+    // ふんばり: 通算best以下(登り直し)に使った時間を除いた残りが新規ゾーン滞在時間
+    if(state.stage.index>best0){
+      const kA=Math.max(0,Math.min(kills,best0-startStage+1));   // best0以下で倒した数
+      let timeA=0;
+      if(kA>0){
+        const tDmg=Math.pow(10, hpSumB(startStage,kA).log10()-dps.log10());   // ダメージ律速の所要時間
+        timeA=Math.max(kA/rate, Math.min(Number.isFinite(tDmg)?tDmg:elapsedSec, elapsedSec));
+      }
+      nzSec=Math.max(0, elapsedSec-timeA);
+    }
+  }
+  // maxHp/tier/HP整合を再導出(stage.index更新後)
+  setupStage_keepHp();
+  const gritGain=(nzSec>0&&Number.isFinite(nzSec))?nzSec/180:0;
+  if(!gold.isZero()){ state.hihiirokane=Bg(state.hihiirokane).add(gold); state.stats.totalEarnedAll=Bg(state.stats.totalEarnedAll||0).add(gold); }
+  if(!credit.isZero()) state.totalEarned=Bg(state.totalEarned).add(credit.mul(powB(10,grit0+gritGain)));   // ふんばり込みで竜核のもとへ(オンライン同様、稼いだふんばりが乗る。支配的な壁際の報酬は終了時点のふんばりで得るため終値を使用)
+  if(gritGain>0) state.prestige.grit=grit0+gritGain;
+  if(kills>0){ state.stats.bahamutDefeated+=kills; recomputeDerived(); } // 累計撃破もオンラインと同様に加算+報酬式(goldGain/prestige連動)・DPS再計算
+  if(!gold.isZero()||kills>0){ D.dirtyHUD=true; D.dirtyPanel=true; D.saveDirty=true; }
+  return {elapsedMs:elapsed,goldGained:gold,kills:kills,stagesGained:kills,startStage:startStage,gritGained:gritGain};
+}
+
+/* =====================================================================
+   B5  ECONOMY
+   ===================================================================== */
+function girlDps(g,tier,level){ const T=tier||0; return g.baseDps*CLASSMULT[T]*(1+(level-1)*DPS_SLOPE); }  // Number(小)。転生倍率は computeDPS で Big 化
+function computeDPS(){   // → Big
+  let sum=0;
+  for(const g of GIRLS){
+    const st=state.girls[g.id];
+    if(st&&st.owned){ sum+=girlDps(g,st.tier||0,st.level); }
+  }
+  const partyBonus=1+(state.upgrades.partyDps||0)*0.08;
+  const pres=prestigeMult();   // Big
+  const cr=getCrit(); const critFactor=1+cr.chance*(cr.mult-1);   // 会心期待値(仲間の自動攻撃にも反映)
+  const girlsDPS=pres.mul(sum*partyBonus*critFactor); // 仲間由来DPS(会心込み・自動の腕輪を含まない) Big
+  // 自動の腕輪: 毎秒lv回の自動タップ。実タップ相当(素タップ威力＋会心期待)＋仲間DPSの一定割合。
+  const autoLv=state.upgrades.autoClick||0;
+  let autoDPS=BIG0;
+  if(autoLv>0){
+    const rawTap=1+(state.upgrades.tapPower||0)*2;        // 素タップ威力(転生前)
+    const perTap=pres.mul(rawTap*critFactor).add(girlsDPS.mul(AUTO_PARTY_FRACTION));  // 自動タップ1回の価値 Big
+    autoDPS=perTap.mul(autoLv);
+  }
+  return girlsDPS.add(autoDPS);
+}
+function computeTapDamage(){   // → Big
+  const lv=state.upgrades.tapPower||0;
+  return prestigeMult().mul(1+lv*2).floor();
+}
+// タップにDPS連動分を上乗せする割合(火力インフレへの追随)
+const TAP_DPS_FRACTION=0.5;
+// 自動の腕輪: 1レベルあたり「仲間DPSの何割」を自動タップ寄与として加算するか(Lv20で×1.0=放置DPS約2倍)
+const AUTO_PARTY_FRACTION=0.05;
+function recomputeDerived(){
+  const baseTap=computeTapDamage();   // Big
+  D.dps=computeDPS();                 // Big
+  // 確定DPSの一定割合をタップ威力へ後加算(中盤以降もタップを有意味化)
+  D.tapDmg=baseTap.add(D.dps.mul(TAP_DPS_FRACTION));   // Big
+  D.goldMult=1; // 報酬式に gainLv を内包しているので 1
+  D.dirtyHUD=true; D.dirtyPanel=true;
+}
+function getCrit(){
+  const chance=clamp(0.05+(state.upgrades.critChance||0)*0.01,0,0.60);
+  const mult=2.0+(state.upgrades.critDamage||0)*0.25;
+  return {chance,mult};
+}
+function dealDamage(amount,opts){
+  opts=opts||{};
+  amount=Bg(amount);
+  if(amount.isZero()) return;
+  let final=amount, isCrit=false;
+  if(opts.source==="tap"){
+    const c=getCrit();
+    if(Math.random()<c.chance){ final=amount.mul(c.mult); isCrit=true; state.stats.totalCrits++; }
+  }
+  state.bahamut.hp=Bg(state.bahamut.hp).sub(final);
+  if(!opts.silent && state.settings.damageNumbers){
+    spawnDamageNumber(final,opts.x,opts.y,isCrit);
+  }
+  if(!opts.silent){
+    flashBoss();
+    spawnHitSpark(opts.x,opts.y,isCrit);
+    screenShake(isCrit||state.bahamut.isBoss?6:2);
+    // ハプティクスは演出(モーション)とは独立。バイブ設定のみで判定(モーションOFFでも振動する)
+    if(state.settings.haptics&&navigator.vibrate){try{navigator.vibrate(isCrit?14:8);}catch(e){}}
+  }
+  D.dirtyHUD=true;
+  if(state.bahamut.hp.isZero()) onBahamutDefeated();
+}
+function setupStage(){
+  const s=state.stage.index;
+  state.bahamut.isBoss=isBossStage(s);
+  state.bahamut.maxHp=bahamutHp(s);
+  state.bahamut.hp=state.bahamut.maxHp;
+  state.bahamut.tier=Math.floor((s-1)/5);
+  D.dirtyHUD=true;
+}
+let _defeating=false;   // 同一撃破処理の再入防止(同期内のみ)
+let _deathAnim=false;   // 撃破ビジュアルの多重再生防止(見た目のみ)
+let _burstKill=false;   // 1tick内の連続撃破中フラグ(中間撃破の演出を間引く)
+function onBahamutDefeated(){
+  if(_defeating) return;
+  _defeating=true;
+  const s=state.stage.index;
+  const reward=rewardFor(s);   // Big
+  state.hihiirokane=Bg(state.hihiirokane).add(reward);          // 所持ヒヒ(使える金)は常に付与
+  state.stats.totalEarnedAll=Bg(state.stats.totalEarnedAll||0).add(reward);   // 本当の総獲得(記録タブ用): 登り直し分も含めて常に加算
+  if(s>(state.stats.bestStage||0)){                             // 過去最高stage超え=新規ゾーンのみ総獲得(コアの元)に加算。既踏破の再取得ではコアが増えない(再到達→転生でのコア膨張対策)
+    state.totalEarned=Bg(state.totalEarned).add(reward.mul(powB(10,state.prestige.grit||0)));   // ふんばり(粘った時間)ぶん竜核のもとが大きくなる(所持ヒヒには乗らない)
+    state.stats.bestStage=s;
+  }
+  state.stats.bahamutDefeated++;
+  state.stage.killsThisStage++;
+  const wasBoss=state.bahamut.isBoss;
+  const prevTier=state.bahamut.tier;
+  // 討伐履歴(記録タブ): 最新30件。高DPSの中間撃破は最後の1体のみ記録、ボスは必ず記録。
+  if(!_burstKill||wasBoss){
+    if(!state.stats.recentKills) state.stats.recentKills=[];
+    const rec=state.stats.recentKills;
+    rec.unshift({s:s, tier:prevTier, r:reward, boss:wasBoss, t:Date.now()});
+    if(rec.length>30) rec.length=30;
+  }
+  // 1tick内多重撃破時は演出/ボイスを間引く(DOM・FX負荷とちらつき抑制)
+  const fx=!_burstKill;
+  // 撃破演出(粒子・フラッシュ)
+  if(fx) defeatBurst(reward,wasBoss);
+  // ボイス(所持している適当な子)
+  if(fx){
+    const speaker=pickSpeaker();
+    if(speaker) showVoiceLine(speaker,"defeat");
+  }
+  // オンボーディング: 初撃破でヒント
+  if(!state.onboard.shopHinted && Bg(state.hihiirokane).gte(15)){
+    state.onboard.shopHinted=true;
+    toast("ヒヒイロカネを手に入れた！『強化』タブで鋼の一撃を強化してみよう✨",{ms:3600});
+  }
+  // 次ステージへ(HP/最大HPはここで同期的に確定)
+  const next=s+1;
+  state.stage.index=next;
+  if(next>state.stage.highest) state.stage.highest=next;
+  setupStage();
+  // ステージアップ演出
+  if(fx && next%5===1 && next>1){ const sp2=pickSpeaker(); if(sp2) setTimeout(()=>showVoiceLine(sp2,"stageup"),700); }
+  checkRecruitHint();
+  // セーブは同期で都度書かず、dirtyフラグ立てのみ(高DPS時の多重localStorage書き込み=フレーム停止を防止)。
+  // 実際の保存は既存のオートセーブ(AUTOSAVE_MS)に委譲。
+  D.dirtyHUD=true; D.dirtyPanel=true; D.saveDirty=true;
+  // 撃破→次個体スポーン演出 + 名乗りカットイン(新ボスのリスポーン時点に同期して表示)
+  if(fx) playBossRespawn(prevTier!==state.bahamut.tier);
+  else if(prevTier!==state.bahamut.tier || _renderedTier!==state.bahamut.tier) D.dirtyBoss=true;   // バースト中はSVG再生成を遅延(描画ループで1フレーム1回)。多重撃破での連続再生成=フリーズを防止
+  // 同期処理完了。次のキル判定を解禁(高DPSでも即次へ進める)
+  _defeating=false;
+}
+let _renderedTier=-1;
+// 名乗りカットイン: tier別の二つ名 + Lv(=stage*10)
+const BAHA_EPITHETS=["幻晶竜","蒼氷竜","黄金竜","紅蓮竜","紫電竜","翠嵐竜","白銀竜","虹彩竜"];
+function bahamutName(tier){
+  const n=BAHA_EPITHETS.length;
+  const ep=BAHA_EPITHETS[((tier%n)+n)%n];
+  const c=Math.floor(tier/n);
+  return ep+"バハムート"+(c>0?"+"+formatNumber(c):"");
+}
+// カットイン用: 「○○竜バハムート」本体と「+N」周回部を分割(語中改行を防ぎ +N だけ次行へ)
+function bahamutNameParts(tier){
+  const n=BAHA_EPITHETS.length;
+  const ep=BAHA_EPITHETS[((tier%n)+n)%n];
+  const c=Math.floor(tier/n);
+  return {base:ep+"バハムート", plus:c>0?"+"+formatNumber(c):""};
+}
+let _lastCutinAt=0;
+function showCutin(){
+  if(_ffQuiet) return;
+  if(D._rushAt && nowMs()-D._rushAt<900) return;   // 快進撃中は名乗りカットインを抑制(ステージが秒間数百進むため演出を覆い隠す)
+  const layer=document.getElementById("cutinLayer"); if(!layer) return;
+  const now=nowMs();
+  const isBoss=state.bahamut.isBoss;
+  if(!isBoss && now-_lastCutinAt<1100) return; // 通常stageの過剰連発を抑制(ボスは必ず出す)
+  _lastCutinAt=now;
+  const s=state.stage.index, lv=s*10, np=bahamutNameParts(state.bahamut.tier);
+  while(layer.firstChild) layer.removeChild(layer.firstChild);
+  const c=document.createElement("div");
+  c.className="cutin";
+  c.innerHTML=`<div class="cstage">STAGE ${formatNumber(s)}${isBoss?'<span class="cboss">BOSS</span>':''}</div>`
+            +`<div class="cname"><span class="clv">Lv${formatNumber(lv)}</span><span class="bnMain">${np.base}</span>${np.plus?'<span class="bnPlus">'+np.plus+'</span>':''}</div>`;
+  layer.appendChild(c);
+  setTimeout(()=>{ if(c.parentNode) c.parentNode.removeChild(c); },2000);
+  cutinSE(isBoss);   // 登場SE
+}
+// 登場カットインのSE: 上昇アルペジオのジングル(ボスは少し豪華に)
+function cutinSE(isBoss){
+  if(!state.settings.sound) return;
+  const notes=isBoss?[523,659,784,1047]:[659,880,1047];
+  notes.forEach((f,i)=>setTimeout(()=>blip(f, i===notes.length-1?0.2:0.09), i*70));
+}
+function playBossRespawn(tierChanged){
+  const root=dom.bossSvgRoot||document.getElementById("bossSvgRoot");
+  if(!root) return;
+  if(!state.settings.motion){
+    // 演出オフ: 即時に再描画+カットイン(no-motionでは静的表示)
+    if(tierChanged || _renderedTier!==state.bahamut.tier) renderBahamutSvg();
+    showCutin();
+    return;
+  }
+  if(_deathAnim){
+    // 連続撃破中(死亡アニメ進行中): 見た目だけ追従し、カットインは重ねない
+    if(tierChanged || _renderedTier!==state.bahamut.tier) renderBahamutSvg();
+    return;
+  }
+  _deathAnim=true;
+  root.classList.remove("boss-breathe");
+  root.classList.add("boss-die");
+  setTimeout(()=>{
+    root.classList.remove("boss-die");
+    renderBahamutSvg();
+    void root.offsetWidth;
+    root.classList.add("boss-spawn");
+    showCutin();   // ★新ボスのリスポーンに合わせて名乗りカットイン
+    setTimeout(()=>{ root.classList.remove("boss-spawn"); _deathAnim=false; },520);
+  },660);  // 撃破の“溜め”(ウェイト)を少し長めに=財宝演出が映える
+}
+function pickSpeaker(){
+  // 所持している子からランダム(いなければ null)
+  const owned=GIRLS.filter(g=>state.girls[g.id]&&state.girls[g.id].owned);
+  if(owned.length===0) return null;
+  return owned[Math.floor(Math.random()*owned.length)].id;
+}
+function buyUpgrade(id){
+  const u=UPG_BY_ID[id]; if(!u) return false;
+  const lv=state.upgrades[id]||0;
+  if(u.max!=null && lv>=u.max){ if(!_rapidHold) toast("もう最大レベルだよ！",{type:"info"}); return false; }
+  const cost=costOf("upgrade",id,lv);
+  if(Bg(state.hihiirokane).lt(cost)){ if(!_rapidHold) toast("ヒヒイロカネが足りないよ…",{type:"warn"}); return false; }
+  state.hihiirokane=Bg(state.hihiirokane).sub(cost);
+  state.upgrades[id]=lv+1;
+  recomputeDerived();
+  if(!_rapidHold) blip(660);   // 連打中は個別SEを鳴らさない(連打音は間引きで再生)
+  D.saveDirty=true; D.dirtyPanel=true; D.dirtyHUD=true;
+  return true;
+}
+function recruitGirl(id){
+  const g=GIRL_BY_ID[id]; if(!g) return false;
+  if(state.girls[id]&&state.girls[id].owned) return false;
+  const idx=GIRLS.indexOf(g);
+  if(state.stage.highest<RECRUIT_STAGE[idx]){ toast(`ステージ${RECRUIT_STAGE[idx]}到達で解放されるよ`,{type:"info"}); return false; }
+  const cost=g.recruit;
+  if(Bg(state.hihiirokane).lt(cost)){ toast("ヒヒイロカネが足りないよ…",{type:"warn"}); return false; }
+  state.hihiirokane=Bg(state.hihiirokane).sub(cost);
+  state.girls[id]={owned:true,level:1,tier:0};
+  recomputeDerived();
+  showVoiceLine(id,"recruit");
+  blip(820);
+  D.saveDirty=true; D.dirtyPanel=true; D.dirtyHUD=true;
+  return true;
+}
+function levelUpGirl(id,count){
+  const g=GIRL_BY_ID[id]; if(!g) return false;
+  const st=state.girls[id];
+  if(!st||!st.owned) return false;
+  let buys=0, spent=0;
+  if(count==="max"){
+    // 買えるだけ
+    let bal=Bg(state.hihiirokane), lv=st.level;
+    while(buys<100000){
+      const c=costOf("girl",id,lv,st.tier);
+      if(bal.lt(c)) break;
+      bal=bal.sub(c); lv++; buys++; spent+=c;
+    }
+    if(buys===0){ toast("ヒヒイロカネが足りないよ…",{type:"warn"}); return false; }
+  } else {
+    const c=costOf("girl",id,st.level,st.tier);
+    if(Bg(state.hihiirokane).lt(c)){ if(!_rapidHold) toast(st.level>=LCAP?`Lv.${LCAP}！クラスチェンジしよう⭐`:"ヒヒイロカネが足りないよ…",{type:st.level>=LCAP?"info":"warn"}); return false; }
+    buys=1; spent=c;
+  }
+  state.hihiirokane=Bg(state.hihiirokane).sub(spent);
+  st.level+=buys;
+  recomputeDerived();
+  if(Math.random()<0.5) showVoiceLine(id,"levelup");
+  if(!_rapidHold) blip(560);   // 連打中は個別SEを鳴らさない
+  D.saveDirty=true; D.dirtyPanel=true; D.dirtyHUD=true;
+  return true;
+}
+// ===== クラスチェンジ(段位昇格): Lv上限でlevel=1にリセットし次の線形セグメントへ =====
+function classChangeStage(id){ const i=GIRLS.indexOf(GIRL_BY_ID[id]); const T=(state.girls[id]&&state.girls[id].tier)||0; return CC_STAGE[i]+T*CC_STEP; }
+function classChangeCost(id){ const i=GIRLS.indexOf(GIRL_BY_ID[id]); const T=(state.girls[id]&&state.girls[id].tier)||0; return Math.floor(CC_BASE[i]*Math.pow(CC_GROWTH,T)); }
+function canClassChange(id){ const st=state.girls[id]; if(!st||!st.owned) return false; const T=st.tier||0;
+  if(st.level<LCAP || T>=NCLASS-1) return false; return state.stage.highest>=classChangeStage(id); }
+function doClassChange(id){ const st=state.girls[id]; if(!st||!st.owned) return false; const T=st.tier||0;
+  if(st.level<LCAP){ toast(`Lv.${LCAP}でクラスチェンジできるよ`,{type:"info"}); return false; }
+  if(T>=NCLASS-1){ toast("もう最高段位だよ！",{type:"info"}); return false; }
+  if(state.stage.highest<classChangeStage(id)){ toast(`ステージ${classChangeStage(id)}到達で覚醒できるよ`,{type:"info"}); return false; }
+  const cost=classChangeCost(id);
+  if(Bg(state.hihiirokane).lt(cost)){ toast("ヒヒイロカネが足りないよ…",{type:"warn"}); return false; }
+  state.hihiirokane=Bg(state.hihiirokane).sub(cost);
+  st.tier=T+1; st.level=1;
+  recomputeDerived();
+  const title=(CLASS_TITLES[id]&&CLASS_TITLES[id][st.tier])||"";
+  toast(`${GIRL_BY_ID[id].name} が「${title}」へクラスチェンジ！✨`,{ms:3200});
+  showVoiceLine(id,"levelup"); blip(1000,0.2); screenShake(6);
+  D.saveDirty=true; D.dirtyPanel=true; D.dirtyHUD=true;
+  return true;
+}
+// 安い順にまとめて強化: 所持ヒヒで買えるもの(強化Lv/仲間Lv/加入/クラスチェンジ)を最安から自動購入。副作用は最後に一括。
+function buyAllCheapest(){
+  // 個別ループだと深層で数十万〜数百万回=フリーズするため、上限なし強化(等比)は解析的に一括計算する。
+  let bought=0, spent=BIG0;
+  const UNB=[], BND=[];                               // UNB:上限なし(等比) / BND:上限つき(critChance/autoClick)
+  for(const u of UPGRADES){ (u.max==null?UNB:BND).push(u); }
+  // --- Phase A: 仲間系 + 上限つき強化 を最安から正確に(いずれも有界=コスト小・回数少) ---
+  let guard=0;
+  while(guard++<3000){
+    let bc=null, bk=null, bid=null; const bal=Bg(state.hihiirokane);
+    const consider=(cost,kind,id)=>{ const cB=Bg(cost); if(bal.gte(cB) && (bc===null||cB.lt(bc))){ bc=cB; bk=kind; bid=id; } };
+    for(const u of BND){ const lv=state.upgrades[u.id]||0; if(lv<u.max) consider(costOf("upgrade",u.id,lv),"upg",u.id); }
+    for(let i=0;i<GIRLS.length;i++){ const g=GIRLS[i], st=state.girls[g.id];
+      if(!st||!st.owned){ if(state.stage.highest>=RECRUIT_STAGE[i]) consider(g.recruit,"recruit",g.id); }
+      else if(st.level<LCAP){ consider(costOf("girl",g.id,st.level,st.tier),"glv",g.id); }
+      else if(canClassChange(g.id)){ consider(classChangeCost(g.id),"cc",g.id); } }
+    if(!bk) break;
+    state.hihiirokane=Bg(state.hihiirokane).sub(bc); spent=spent.add(bc);
+    if(bk==="upg") state.upgrades[bid]=(state.upgrades[bid]||0)+1;
+    else if(bk==="recruit") state.girls[bid]={owned:true,level:1,tier:0};
+    else if(bk==="glv") state.girls[bid].level++;
+    else { const st=state.girls[bid]; st.tier++; st.level=1; }
+    bought++;
+  }
+  // --- Phase B: 上限なし強化は閾値Tの二分探索で一括(個別購入ループ不要)。コスト≤Tの全レベルを買う=最安から、と等価 ---
+  // cost(ℓ)=base*g^ℓ。閾値t=log10(T)。各強化: 新Lv N=floor((t-log10(base))/log10(g))。
+  // 区間[L,N]の累積コスト = base*(g^(N+1)-g^L)/(g-1) (未floor=厳密floor和の上界 → 予算超えなし)。
+  if(UNB.length){
+    const budget=Bg(state.hihiirokane);
+    if(!budget.isZero()){
+      const totalAt=(t)=>{ let tot=BIG0;
+        for(const u of UNB){ const L=state.upgrades[u.id]||0; const lg=Math.log10(u.growth), lb=Math.log10(u.baseCost);
+          const N=Math.floor((t-lb)/lg); if(N<L) continue;
+          tot=tot.add(powB(u.growth,N+1).sub(powB(u.growth,L)).mul(u.baseCost/(u.growth-1))); }
+        return tot; };
+      let lo=0, hi=Math.max(1,budget.log10())+5; let g2=0;
+      while(totalAt(hi).lte(budget) && g2++<50) hi*=2;          // hiが予算超になるまで拡張(保険)
+      for(let it=0; it<64; it++){ const mid=(lo+hi)/2; if(totalAt(mid).lte(budget)) lo=mid; else hi=mid; }
+      const t=lo;
+      for(const u of UNB){ const L=state.upgrades[u.id]||0; const lg=Math.log10(u.growth), lb=Math.log10(u.baseCost);
+        const N=Math.floor((t-lb)/lg); const cnt=N-L+1; if(cnt<=0) continue;
+        const cost=powB(u.growth,N+1).sub(powB(u.growth,L)).mul(u.baseCost/(u.growth-1)).floor();
+        if(Bg(state.hihiirokane).lt(cost)) continue;            // 安全(概算が予算超なら見送り)
+        state.upgrades[u.id]=N+1; bought+=cnt; spent=spent.add(cost);
+        state.hihiirokane=Bg(state.hihiirokane).sub(cost); }
+    }
+  }
+  if(bought>0){ recomputeDerived(); D.saveDirty=true; D.dirtyHUD=true; D.dirtyPanel=true;
+    if(!_rapidHold) blip(760,0.08);   // SEは単発時のみ
+    // 成功トースト: 単発タップは即時、長押し連打中は約0.7秒ごとに間引き表示(連続表示は防ぎつつ「強化した」感は残す)
+    if(!_rapidHold || nowMs()-(D._baToastAt||0)>700){ D._baToastAt=nowMs(); toast(`安い順にまとめて強化：${formatNumber(bought)}件 / ${formatNumber(spent)} 消費✨`,{ms:_rapidHold?1200:2400}); } }
+  else if(!_rapidHold) toast("いま買えるものがないよ",{type:"info"});   // 買えるもの無しは単発のみ(連打中の連発を防止)
+  return bought;
+}
+// 転生: コア=生涯獲得ヒヒの桁数(log10-PRES_LOG0)。今転生したら増えるコア数を返す。
+function prestigeLifeIfNow(){ return toBig(state.prestige.lifeEarned).add(state.totalEarned); }
+function prestigeGain(){ return Math.max(0, coresFromLife(prestigeLifeIfNow()) - ((state.prestige.cores)||0)); }
+function canPrestige(){ return state.stage.highest>=50 && prestigeGain()>0; }
+function doPrestige(){
+  if(state.stage.highest<50) return false;
+  const newLife=prestigeLifeIfNow();
+  const newCores=coresFromLife(newLife);
+  if(newCores<=((state.prestige.cores)||0)) return false;   // コアが増えない=まだ転生する意味がない
+  const keepSettings=state.settings;
+  const keepOnboard=state.onboard;
+  const keepStats=state.stats;        // プレイ時間・総タップ・累計撃破・討伐履歴は通算で引き継ぐ(転生でリセットしない)
+  keepStats.bestStage=Math.max(keepStats.bestStage||0, state.stage.highest);   // 今回ランの到達を通算最高へ確定(転生後も記録に残す)
+  const cnt=state.prestige.count+1;
+  state=newState();
+  state.settings=keepSettings;
+  state.onboard=keepOnboard;
+  state.stats=keepStats;
+  state.hihiirokane=BIG0; state.totalEarned=BIG0;   // newStateはNumber0 → Bigに
+  state.prestige={cores:newCores, lifeEarned:newLife, count:cnt, grit:0};   // ふんばりは転生でリセット(竜核へ変換済み)
+  setupStage();
+  recomputeDerived();
+  D.saveDirty=true; D.dirtyHUD=true; D.dirtyPanel=true;
+  save("force");
+  return true;
+}
+
+/* =====================================================================
+   B8  FX  (SVG生成・粒子・トースト・吹き出し・音)
+   ===================================================================== */
+// ----- SVGアセット -----
+// キャラ別 表情パラメータ(小サイズでも瞳色以外で見分けられるようにする)
+//  eyeRy: 瞳の縦半径(小さい=半目クール) / eyeCy: 瞳の縦位置(大きい=タレ目)
+//  mouth: 口パス(笑み/大口など)
+const FACE_BY_ID={
+  sakura_kenshi:{eyeRy:7,  eyeCy:50, mouth:"M46 60 Q50 64.5 54 60"},                 // 標準
+  runaria_mahou:{eyeRy:5,  eyeCy:51, mouth:"M47 61 Q50 63 53 61"},                   // やや眠そう・切れ長
+  yumiri_kyuu:  {eyeRy:4,  eyeCy:51, mouth:"M47 61 L53 61"},                          // 半目クール・引き結んだ口
+  merry_kaifuku:{eyeRy:7.5,eyeCy:52, mouth:"M46 60 Q50 63.5 54 60"},                 // タレ目・やさしい弧
+  komugi_dageki:{eyeRy:8,  eyeCy:49, mouth:"M45 59 Q50 67 55 59 Q50 63 45 59Z"},     // 元気な大口
+  sora_shien:   {eyeRy:6,  eyeCy:50, mouth:"M45 60 Q50 64 55 60"},                   // 穏やかな笑み
+};
+function girlSvg(g,opts){
+  opts=opts||{};
+  const p=g.palette; // [hair, skinish, accent, hairHi]
+  const skin="#FFE9DC";
+  const cheek="#FF9FB8";
+  const eye=p[2];
+  const fc=FACE_BY_ID[g.id]||{eyeRy:7,eyeCy:50,mouth:"M46 60 Q50 64.5 54 60"};
+  // 各キャラ簡易差別化(髪型/小物)
+  let hair="";
+  let extra="";
+  if(g.id==="sakura_kenshi"){
+    hair=`<path d="M24 42 Q20 80 32 98 L68 98 Q80 80 76 42 Q76 14 50 12 Q24 14 24 42Z" fill="${p[0]}"/>
+      <path class="sway" d="M70 30 Q92 36 90 60 Q96 78 84 86 Q92 64 80 50 Q78 40 70 38Z" fill="${p[0]}"/>`;
+    extra=`<g transform="translate(30,30)"><circle r="3" fill="${p[2]}"/><ellipse rx="6" ry="2.6" fill="${p[2]}" transform="rotate(0)"/><ellipse rx="6" ry="2.6" fill="${p[2]}" transform="rotate(72)"/><ellipse rx="6" ry="2.6" fill="${p[2]}" transform="rotate(144)"/><ellipse rx="6" ry="2.6" fill="${p[2]}" transform="rotate(216)"/><ellipse rx="6" ry="2.6" fill="${p[2]}" transform="rotate(288)"/><circle r="2.5" fill="${p[1]}"/></g>`;
+  } else if(g.id==="runaria_mahou"){
+    hair=`<path d="M22 44 Q16 92 28 110 L72 110 Q84 92 78 44 Q78 14 50 12 Q22 14 22 44Z" fill="${p[0]}"/>`;
+    extra=`<polygon points="30,28 70,28 50,2" fill="${p[2]}"/><rect x="26" y="25" width="48" height="7" rx="3" fill="${p[2]}"/><circle cx="50" cy="4" r="5" fill="#fff" class="twk"/>`;
+  } else if(g.id==="yumiri_kyuu"){
+    hair=`<path d="M30 24 Q8 30 12 56 Q8 76 22 84 Q14 64 26 50 Q28 34 34 30Z" fill="${p[0]}"/>
+      <path d="M70 24 Q92 30 88 56 Q92 76 78 84 Q86 64 74 50 Q72 34 66 30Z" fill="${p[0]}"/>
+      <path d="M24 44 Q22 70 34 82 L66 82 Q78 70 76 44 Q76 18 50 16 Q24 18 24 44Z" fill="${p[0]}"/>`;
+    extra=`<path d="M78 88 Q96 64 86 40" stroke="#FF8A5B" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  } else if(g.id==="merry_kaifuku"){
+    hair=`<path d="M24 44 Q22 82 34 92 L66 92 Q78 82 76 44 Q76 16 50 14 Q24 16 24 44Z" fill="${p[0]}"/>`;
+    extra=`<ellipse cx="50" cy="13" rx="14" ry="4.5" fill="none" stroke="${p[2]}" stroke-width="3" class="twk"/>`;
+  } else if(g.id==="komugi_dageki"){
+    hair=`<path d="M26 46 Q26 70 36 80 L64 80 Q74 70 74 46 Q74 20 50 18 Q26 20 26 46Z" fill="${p[0]}"/>
+      <path class="ahoge" d="M50 16 Q58 4 52 0 Q62 8 50 16Z" fill="${p[0]}"/>`;
+    extra=`<rect x="28" y="40" width="44" height="7" rx="3" fill="${p[2]}"/><circle cx="34" cy="92" r="9" fill="${p[2]}"/><circle cx="66" cy="92" r="9" fill="${p[2]}"/>`;
+  } else { // sora_shien
+    hair=`<path d="M22 44 Q14 96 26 112 L74 112 Q86 96 78 44 Q78 14 50 12 Q22 14 22 44Z" fill="${p[0]}"/>`;
+    extra=`<polygon points="40,12 43,4 46,12" fill="${p[2]}"/><polygon points="48,10 51,1 54,10" fill="${p[2]}"/><polygon points="56,12 59,4 62,12" fill="${p[2]}"/><ellipse cx="50" cy="60" rx="34" ry="14" fill="none" stroke="${p[3]}" stroke-width="1.5" opacity=".55" class="spinring"/>`;
+  }
+  // 体
+  const body=`<path d="M37 80 Q50 76 63 80 L72 114 Q50 122 28 114Z" fill="${g.id==='sakura_kenshi'||g.id==='merry_kaifuku'?'#FFFFFF':p[0]}" opacity="${g.id==='sora_shien'?'.85':'1'}"/>
+    <rect x="34" y="94" width="32" height="5" rx="2.5" fill="${p[2]}"/>`;
+  // 顔パーツ(eyeRy/eyeCy/mouth でキャラ別の表情差を出す)
+  const ery=fc.eyeRy, ecy=fc.eyeCy;
+  const hiY=(ecy-3).toFixed(1), gleamY=(ecy+2).toFixed(1);
+  const face=`<ellipse cx="50" cy="50" rx="26" ry="24" fill="${skin}"/>
+    <ellipse cx="36" cy="56" rx="5" ry="3.4" fill="${cheek}" opacity=".7"/>
+    <ellipse cx="64" cy="56" rx="5" ry="3.4" fill="${cheek}" opacity=".7"/>
+    <ellipse cx="40" cy="${ecy}" rx="5" ry="${ery}" fill="${eye}"/>
+    <ellipse cx="60" cy="${ecy}" rx="5" ry="${ery}" fill="${eye}"/>
+    <circle cx="42" cy="${hiY}" r="2" fill="#fff"/><circle cx="62" cy="${hiY}" r="2" fill="#fff"/>
+    <circle cx="38.5" cy="${gleamY}" r="1" fill="${p[2]}"/><circle cx="58.5" cy="${gleamY}" r="1" fill="${p[2]}"/>
+    <path d="${fc.mouth}" stroke="${p[2]}" stroke-width="1.6" fill="${fc.mouth.endsWith('Z')?p[2]:'none'}" stroke-linecap="round"/>`;
+  // 前髪
+  let bang=`<path d="M24 42 Q26 18 50 16 Q74 18 76 42 Q66 30 58 34 Q54 22 50 22 Q46 22 42 34 Q34 30 24 42Z" fill="${p[3]}"/>`;
+  const shadow=`<ellipse cx="50" cy="120" rx="22" ry="4" fill="#000" opacity=".10"/>`;
+  return `<svg viewBox="0 0 100 128" xmlns="http://www.w3.org/2000/svg">
+    ${shadow}${hair}${extra}${body}${face}${bang}
+  </svg>`;
+}
+
+// 主人公(プレイヤー自身)。girlSvg と同じ viewBox/絵柄(丸ゴシック/パステル/白縁)。
+// 仲間6人と見分けがつくよう: アプリコット髪のツインテール+小さな星のヘアピン、
+// 白×ラベンダーの旅装、手元から斜め上(ボス側=上)へ短い剣を構える。
+function playerSvg(){
+  const hair="#FFB27A", hairHi="#FFC9A0", accent="#7E5BD6", trim="#C9A7F0";
+  const skin="#FFE9DC", cheek="#FF9FB8", eye="#7E5BD6";
+  const shadow=`<ellipse cx="50" cy="120" rx="22" ry="4" fill="#000" opacity=".10"/>`;
+  // ツインテール(左右に揺れる)
+  const tails=`<path class="sway" d="M24 44 Q4 60 8 90 Q2 104 16 106 Q10 86 22 70 Q24 56 28 50Z" fill="${hair}"/>
+    <path class="sway" style="animation-delay:.6s" d="M76 44 Q96 60 92 90 Q98 104 84 106 Q90 86 78 70 Q76 56 72 50Z" fill="${hair}"/>`;
+  // 後ろ髪
+  const hairBack=`<path d="M24 44 Q18 84 30 96 L70 96 Q82 84 76 44 Q76 14 50 12 Q24 14 24 44Z" fill="${hair}"/>`;
+  // 旅装(白の上着+ラベンダーのスカート風)
+  const body=`<path d="M37 80 Q50 76 63 80 L72 114 Q50 122 28 114Z" fill="#FFFFFF"/>
+    <path d="M40 98 L60 98 L66 114 Q50 120 34 114Z" fill="${trim}" opacity=".9"/>
+    <rect x="34" y="94" width="32" height="5" rx="2.5" fill="${accent}"/>`;
+  // 顔(にこっと前向き)
+  const face=`<ellipse cx="50" cy="50" rx="26" ry="24" fill="${skin}"/>
+    <ellipse cx="36" cy="56" rx="5" ry="3.4" fill="${cheek}" opacity=".7"/>
+    <ellipse cx="64" cy="56" rx="5" ry="3.4" fill="${cheek}" opacity=".7"/>
+    <ellipse cx="40" cy="50" rx="5" ry="7" fill="${eye}"/>
+    <ellipse cx="60" cy="50" rx="5" ry="7" fill="${eye}"/>
+    <circle cx="42" cy="47" r="2" fill="#fff"/><circle cx="62" cy="47" r="2" fill="#fff"/>
+    <circle cx="38.5" cy="52" r="1" fill="#fff"/><circle cx="58.5" cy="52" r="1" fill="#fff"/>
+    <path d="M45 61 Q50 66 55 61" stroke="${accent}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`;
+  // 前髪+星のヘアピン
+  const bang=`<path d="M24 42 Q26 18 50 16 Q74 18 76 42 Q66 30 58 34 Q54 22 50 22 Q46 22 42 34 Q34 30 24 42Z" fill="${hairHi}"/>
+    <polygon class="twk" points="68,30 70.5,35 76,35.5 72,39 73,44.5 68,42 63,44.5 64,39 60,35.5 65.5,35" fill="${accent}"/>`;
+  // 小さな剣(手元 64,96 から斜め上=ボス側へ。pcSword で振る)
+  const sword=`<g class="pcSword">
+    <ellipse cx="64" cy="98" rx="6" ry="4.5" fill="${skin}"/>
+    <rect x="55" y="84" width="18" height="5" rx="2.5" fill="${accent}" transform="rotate(-42 64 96)"/>
+    <rect x="61.5" y="62" width="5" height="30" rx="2.5" fill="#EAF2FF" stroke="${accent}" stroke-width="1.4" transform="rotate(-42 64 96)"/>
+    <polygon points="61.5,58 66.5,58 64,50" fill="#EAF2FF" stroke="${accent}" stroke-width="1.2" transform="rotate(-42 64 96)"/>
+    <circle cx="64" cy="96" r="2.4" fill="#FFD98A" stroke="${accent}" stroke-width="1" transform="rotate(-42 64 96)"/>
+  </g>`;
+  return `<svg viewBox="0 0 100 128" xmlns="http://www.w3.org/2000/svg">
+    ${shadow}<g class="pcBody">${tails}${hairBack}${body}${face}${bang}${sword}</g>
+  </svg>`;
+}
+
+function bahamutSvg(tier){
+  // 段位(名前)に合わせた配色: 幻晶(cyan)/蒼氷(blue)/黄金(gold)/紅蓮(crimson)/紫電(purple)/翠嵐(green)/白銀(silver)/虹彩(rainbow)
+  const FILT=["hue-rotate(0deg)","hue-rotate(22deg) saturate(1.15)","hue-rotate(215deg) saturate(1.5) brightness(1.08)","hue-rotate(172deg) saturate(1.55)","hue-rotate(95deg) saturate(1.35)","hue-rotate(300deg) saturate(1.25)","saturate(0.32) brightness(1.32)"];
+  const ep=((tier%8)+8)%8;   // 名前(二つ名)と同じ8循環で配色(BAHA_EPITHETSと対応)
+  const rainbow=ep===7;      // 虹彩竜のみ虹色アニメ。tier8以降は名前が幻晶竜+1…に戻るので色も循環
+  const filt=rainbow?"":FILT[ep];
+  const golden=tier>=2; // 黄金化アクセント(段位ストローク)
+  const stroke=golden?`stroke="url(#bgold)" stroke-width="2"`:"";
+  const t=`0 0 200 200`;
+  return `<svg viewBox="${t}" xmlns="http://www.w3.org/2000/svg" class="${rainbow?'boss-rainbow':''}" style="${filt?('filter:'+filt):''}">
+   <defs>
+     <linearGradient id="bgold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD98A"/><stop offset="1" stop-color="#F25C7A"/></linearGradient>
+     <radialGradient id="coreg" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFF4D0"/><stop offset=".6" stop-color="#FFD98A"/><stop offset="1" stop-color="#FF8A5B"/></radialGradient>
+   </defs>
+   <ellipse cx="100" cy="188" rx="46" ry="7" fill="#000" opacity=".10"/>
+   <path class="btail" d="M70 150 Q40 165 50 180 Q44 190 58 188 Q52 176 70 168Z" fill="#5B8FE0"/>
+   <polygon points="50,180 46,188 54,188" fill="#C9F0F7"/>
+   <g class="bwingL" style="transform-origin:70px 100px;">
+     <path d="M70 95 Q30 55 12 80 Q34 78 40 95 Q20 88 28 108 Q44 100 56 112Z" fill="#A7E8F2" ${stroke}/>
+     <line x1="40" y1="86" x2="60" y2="104" stroke="#5B8FE0" stroke-width="1.5"/>
+   </g>
+   <g class="bwingR" style="transform-origin:130px 100px;">
+     <path d="M130 95 Q170 55 188 80 Q166 78 160 95 Q180 88 172 108 Q156 100 144 112Z" fill="#A7E8F2" ${stroke}/>
+     <line x1="160" y1="86" x2="140" y2="104" stroke="#5B8FE0" stroke-width="1.5"/>
+   </g>
+   <ellipse cx="100" cy="120" rx="40" ry="34" fill="#7FD8E8" ${stroke}/>
+   <ellipse cx="100" cy="128" rx="24" ry="22" fill="#C9F0F7"/>
+   <polygon class="bcore" points="100,108 113,116 113,132 100,140 87,132 87,116" fill="url(#coreg)"/>
+   <ellipse cx="100" cy="78" rx="42" ry="36" fill="#A7E8F2" ${stroke}/>
+   <polygon points="88,48 80,18 96,46" fill="#C9F0F7"/>
+   <polygon points="112,48 120,18 104,46" fill="#C9F0F7"/>
+   ${tier>=1?'<polygon points="100,42 96,16 104,16" fill="#C9F0F7"/>':''}
+   <ellipse class="beyeL" cx="84" cy="80" rx="9" ry="11" fill="#2B3A55"/>
+   <ellipse class="beyeR" cx="116" cy="80" rx="9" ry="11" fill="#2B3A55"/>
+   <circle cx="87" cy="75" r="3.4" fill="#fff"/><circle cx="119" cy="75" r="3.4" fill="#fff"/>
+   <circle cx="81" cy="84" r="1.6" fill="#FFD98A"/><circle cx="113" cy="84" r="1.6" fill="#FFD98A"/>
+   <path d="M70 66 Q84 62 96 70" stroke="#2B3A55" stroke-width="2" fill="none" stroke-linecap="round"/>
+   <path d="M104 70 Q116 62 130 66" stroke="#2B3A55" stroke-width="2" fill="none" stroke-linecap="round"/>
+   <path class="bmouth" d="M86 102 Q100 110 114 102" stroke="#2B3A55" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+   <path d="M78 96 Q66 100 60 96" stroke="#5B8FE0" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".7"/>
+   <path d="M122 96 Q134 100 140 96" stroke="#5B8FE0" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".7"/>
+  </svg>`;
+}
+
+let _bossAnimSheet=null;
+function ensureBossAnims(){
+  if(_bossAnimSheet) return;
+  const css=`
+  .bwingL{animation:flapL 1.6s ease-in-out infinite;}
+  .bwingR{animation:flapR 1.6s ease-in-out infinite;}
+  @keyframes flapL{0%,100%{transform:rotate(0);}50%{transform:rotate(-8deg);}}
+  @keyframes flapR{0%,100%{transform:rotate(0);}50%{transform:rotate(8deg);}}
+  .btail{animation:btail 3s ease-in-out infinite;transform-origin:70px 150px;}
+  @keyframes btail{0%,100%{transform:rotate(-4deg);}50%{transform:rotate(4deg);}}
+  .bcore{animation:coreGlow 2.2s ease-in-out infinite;transform-origin:100px 124px;}
+  @keyframes coreGlow{0%,100%{opacity:.7;filter:drop-shadow(0 0 2px #FFD98A);}50%{opacity:1;filter:drop-shadow(0 0 6px #FFD98A);}}
+  .boss-rainbow{animation:bossRainbow 5s linear infinite;}
+  @keyframes bossRainbow{0%{filter:hue-rotate(0deg) saturate(1.4);}100%{filter:hue-rotate(360deg) saturate(1.4);}}
+  `;
+  const st=document.createElement("style");st.textContent=css;document.head.appendChild(st);
+  _bossAnimSheet=st;
+}
+
+// ----- ダメージ数字 / 粒子プール -----
+const fxLayer=()=>document.getElementById("fxLayer");
+const dmgPool=[]; const partPool=[];
+const activeDmg=[]; const activeParts=[];
+function getDmgEl(){
+  let e=dmgPool.pop();
+  if(!e){e=document.createElement("div");e.className="dmgnum";fxLayer().appendChild(e);}
+  return e;
+}
+function getPartEl(){
+  let e=partPool.pop();
+  if(!e){e=document.createElement("div");e.className="particle";fxLayer().appendChild(e);}
+  return e;
+}
+function rectCenter(){
+  const w=document.getElementById("bossWrap");
+  const layer=fxLayer();
+  if(!w||!layer) return {x:180,y:160};
+  const wr=w.getBoundingClientRect(), lr=layer.getBoundingClientRect();
+  return {x:wr.left-lr.left+wr.width/2, y:wr.top-lr.top+wr.height*0.45};
+}
+// ダメージ数字の表示アンカー: 顔(中央)を避けて頭上の帯に出す
+function dmgAnchor(){
+  const w=document.getElementById("bossWrap");
+  const layer=fxLayer();
+  if(!w||!layer) return {x:180,y:60};
+  const wr=w.getBoundingClientRect(), lr=layer.getBoundingClientRect();
+  return {x:wr.left-lr.left+wr.width/2, y:wr.top-lr.top+wr.height*0.15};  // 顔(0.45h)より上=頭上
+}
+function spawnDamageNumber(amount,x,y,isCrit,auto,superHit){
+  if(!state.settings.damageNumbers) return;
+  // x,y はレイヤ内座標が渡される運用(tapAttack側で変換済み)。null時は中央を採用。autoは散らして表示。
+  const a=dmgAnchor();
+  const px=(x==null)?a.x+(Math.random()*(auto?96:72)-(auto?48:36)):x;   // 顔を避け頭上で横に散らす
+  const py=(y==null)?a.y+(Math.random()*36-14):y;                        // 頭上の帯(顔より上)
+  if(activeDmg.length>=MAX_DMG_NUMS){ const old=activeDmg.shift(); retireDmg(old); }
+  const e=getDmgEl();
+  const autoCrit=isCrit&&auto&&!superHit;   // オート(仲間)の会心は控えめ専用スタイル(タップ会心 CRITICAL! と区別)
+  e.className="dmgnum"+(superHit?" crit super":autoCrit?" acrit":isCrit?" crit":auto?" auto":"");
+  e.innerHTML=(superHit?'<span class="critlbl">✦必殺✦</span>':autoCrit?'<span class="critlbl acl">会心</span>':isCrit?'<span class="critlbl">CRITICAL!</span>':"")+formatNumber(amount);
+  e.style.left=px+"px"; e.style.top=py+"px"; e.style.opacity="1";
+  e.style.transform="translate(-50%,-50%)";
+  activeDmg.push({el:e,x:px,y:py,t:0,life:superHit?1300:(autoCrit?760:(isCrit?1000:(auto?620:800))),dx:(Math.random()*30-15),isCrit:isCrit||superHit});
+}
+function retireDmg(o){ o.el.style.opacity="0"; dmgPool.push(o.el); }
+const SPARK_COLORS=["#FFD98A","#FFFFFF","#FF8A5B","#C9F0F7","#F25C7A"];
+function spawnHitSpark(x,y,isCrit){
+  if(!state.settings.motion) return;
+  const layer=fxLayer().getBoundingClientRect();
+  const px=(x==null)?rectCenter().x:x-layer.left;
+  const py=(y==null)?rectCenter().y:y-layer.top;
+  const count=isCrit?7:4;
+  for(let i=0;i<count;i++){
+    if(activeParts.length>=MAX_PARTICLES) break;
+    const e=getPartEl();
+    const sz=isCrit?(8+Math.random()*6):(5+Math.random()*4);
+    const col=SPARK_COLORS[(Math.random()*SPARK_COLORS.length)|0];
+    e.innerHTML=`<svg width="${sz}" height="${sz}" viewBox="0 0 10 10"><polygon points="5,0 6,4 10,5 6,6 5,10 4,6 0,5 4,4" fill="${col}"/></svg>`;
+    e.style.left=px+"px"; e.style.top=py+"px"; e.style.opacity="1";
+    const ang=randAngle(); const spd=isCrit?(38+Math.random()*30):(24+Math.random()*20);
+    activeParts.push({el:e,x:px,y:py,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd-10,g:60,t:0,life:300+Math.random()*200,rot:Math.random()*360,vr:Math.random()*400-200});
+  }
+}
+// ヒヒイロカネの金の延べ棒(インゴット)。撃破時に大量に噴き出す花火演出。
+function goldBarSVG(sz){
+  const w=sz.toFixed(1), h=(sz*0.7).toFixed(1);
+  return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 26 18">'
+    +'<polygon points="4,8 22,8 19,3.4 7,3.4" fill="#FFE9A6" stroke="#C9821F" stroke-width=".7" stroke-linejoin="round"/>'
+    +'<polygon points="4,8 22,8 25,17 1,17" fill="#F4B63C" stroke="#C9821F" stroke-width=".7" stroke-linejoin="round"/>'
+    +'<polygon points="6.6,9.6 11,9.6 9,16 5,16" fill="#FFFFFF" opacity=".42"/>'
+    +'</svg>';
+}
+// 上向きに噴き出して重力で弧を描き、回転しながら降り注ぐ「金の延べ棒の雨」。
+// 多めの本数を数波に分けて出すことで“たくさん溢れ出す”感を出す。motion設定とMAX_PARTICLESで安全に上限。
+function goldBarBurst(isBoss){
+  if(!state.settings.motion) return;
+  const c=rectCenter();
+  const waves=isBoss?3:2;
+  const perWave=isBoss?16:11;
+  for(let w=0;w<waves;w++){
+    setTimeout(function(){
+      for(let i=0;i<perWave;i++){
+        if(activeParts.length>=MAX_PARTICLES) break;
+        const e=getPartEl();
+        const sz=15+Math.random()*11;
+        e.innerHTML=goldBarSVG(sz);
+        e.style.left=c.x+"px"; e.style.top=c.y+"px"; e.style.opacity="1";
+        const ang=-Math.PI/2+(Math.random()-0.5)*1.8;   // 上向き噴水(±約51°)
+        const spd=155+Math.random()*200;
+        activeParts.push({el:e,x:c.x,y:c.y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,g:560,t:0,life:1200+Math.random()*650,rot:Math.random()*360,vr:Math.random()*680-340});
+      }
+    }, w*110);
+  }
+  if(state.settings.sound && isBoss) setTimeout(function(){ blip(1040,0.12); },130);
+}
+// 財宝ザクザクSE: 高音のきらめき連鎖(しゃらんしゃらん)+低音の重み(じゃらん)。WebAudioのみ。
+function treasureSE(isBoss){
+  if(!state.settings.sound||!D.audioReady||!D.audioCtx) return;
+  try{
+    const ctx=D.audioCtx, t0=ctx.currentTime;
+    const hi=[1568,1760,2093,2349,2637,3136];           // 高音ペンタ(きらめき)
+    const n=isBoss?20:13;
+    for(let i=0;i<n;i++){
+      const t=t0 + i*0.034 + Math.random()*0.018;        // コインが連なって落ちる感じ
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type= Math.random()<0.5?"triangle":"sine";
+      o.frequency.value= hi[(Math.random()*hi.length)|0] * (Math.random()<0.4?0.5:1);
+      const vol=0.045+Math.random()*0.05;
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(vol,t+0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.11+Math.random()*0.1);
+      o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+0.26);
+    }
+    // 低音の "じゃらん"(財宝の重み)
+    const bo=ctx.createOscillator(), bg=ctx.createGain();
+    bo.type="triangle"; bo.frequency.value=isBoss?170:210;
+    bg.gain.setValueAtTime(0.0001,t0);
+    bg.gain.exponentialRampToValueAtTime(0.13,t0+0.02);
+    bg.gain.exponentialRampToValueAtTime(0.0001,t0+0.42);
+    bo.connect(bg); bg.connect(ctx.destination); bo.start(t0); bo.stop(t0+0.46);
+  }catch(e){}
+}
+function defeatBurst(reward,isBoss){
+  if(_ffQuiet) return;
+  if(state.settings.motion){
+    const c=rectCenter();
+    goldBarBurst(isBoss);            // ★ヒヒイロカネの金の延べ棒が大量に噴き出す
+    const count=isBoss?20:14;
+    for(let i=0;i<count;i++){
+      if(activeParts.length>=MAX_PARTICLES) break;
+      const e=getPartEl();
+      const coin=Math.random()<0.6;
+      e.innerHTML=coin
+        ? `<svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="#FFD98A" stroke="#FF8A5B" stroke-width="1.4"/><polygon points="7,3 8,6 11,6 8.5,8 9.5,11 7,9 4.5,11 5.5,8 3,6 6,6" fill="#FFF4D0"/></svg>`
+        : `<svg width="12" height="12" viewBox="0 0 12 12"><polygon points="6,0 11,6 6,12 1,6" fill="${["#C9F0F7","#A7E8F2","#C9A7F0"][(Math.random()*3)|0]}" stroke="#7FD8E8" stroke-width="1"/></svg>`;
+      e.style.left=c.x+"px"; e.style.top=c.y+"px"; e.style.opacity="1";
+      const ang=randAngle(); const spd=60+Math.random()*70;
+      activeParts.push({el:e,x:c.x,y:c.y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd-60,g:140,t:0,life:900+Math.random()*300,rot:Math.random()*360,vr:Math.random()*500-250});
+    }
+    // 全画面フラッシュ+リング
+    const fl=document.getElementById("flashLayer");
+    const f=document.createElement("div");f.className="bigflash";fl.appendChild(f);
+    setTimeout(()=>f.remove(),320);
+    const ring=document.createElement("div");ring.className="shockring";
+    ring.style.left=c.x+"px";ring.style.top=c.y+"px";fxLayer().appendChild(ring);
+    setTimeout(()=>ring.remove(),560);
+    screenShake(isBoss?9:5);
+  }
+  // 獲得トースト風(きらめき)
+  spawnDamageNumber(reward,null,rectCenter().y-30,true);
+  treasureSE(isBoss);   // 財宝ザクザク(しゃらん/じゃらん)
+}
+
+// ----- screen shake -----
+function screenShake(intensity){
+  if(!state.settings.motion) return;
+  D.shake=Math.min(Math.max(D.shake,intensity),12);
+  D.shakeT=0;
+}
+function flashBoss(){
+  if(!state.settings.motion) return;
+  const r=document.getElementById("bossSvgRoot");
+  if(!r) return;
+  // 揺れ中は呼吸を外す(boss-breathe と bossShake が同じ transform を奪い合うのを解消)
+  r.classList.remove("boss-breathe");
+  r.classList.remove("boss-hurt"); void r.offsetWidth; r.classList.add("boss-hurt");
+  clearTimeout(flashBoss._t);
+  flashBoss._t=setTimeout(()=>{
+    r.classList.remove("boss-hurt");
+    // 撃破/スポーン演出中(_deathAnim)でなく、演出ONなら呼吸を復帰
+    if(state.settings.motion && !_deathAnim) r.classList.add("boss-breathe");
+  },330); // bossShake .32s より僅かに後
+}
+
+// ----- 吹き出し / ボイス -----
+let _lastBubbleAt=0;
+let _lastTapBubbleAt=0;
+let _bubbleSide=0;
+// 右下/左下を交互に。新しいセリフが下、古いセリフは上へ押し上がる(最大2行)。
+function nextBubbleSide(){ _bubbleSide^=1; return _bubbleSide?"right":"left"; }
+function showVoiceLine(girlId,key){
+  if(_ffQuiet) return;
+  if(D._rushAt && nowMs()-D._rushAt<900) return;   // 快進撃中は吹き出しを抑制(バトル上部の快進撃UIと重なるため。終われば再開)
+  const g=GIRL_BY_ID[girlId]; if(!g) return;
+  if(_rapidHold && key==="levelup") return; // 長押し連打中はレベルアップ吹き出しを抑制(チラつき防止)
+  const arr=VOICES[girlId]&&VOICES[girlId][key];
+  if(!arr||arr.length===0) return;
+  const t=nowMs();
+  if(key==="tap"){
+    if(t-_lastTapBubbleAt<900) return; // tap連発抑制(tap専用タイマー)
+    _lastTapBubbleAt=t;
+  }
+  _lastBubbleAt=t;
+  const text=arr[(Math.random()*arr.length)|0];
+  const layer=document.getElementById("bubbleLayer");
+  // 同時表示は2件まで
+  while(layer.children.length>=2) layer.removeChild(layer.firstChild);
+  const b=document.createElement("div");
+  b.className="bubble "+nextBubbleSide();
+  b.innerHTML=`<span class="bmini">${girlSvg(g)}</span><span><span class="bname">${g.name}</span> ${text}</span>`;
+  layer.appendChild(b);
+  setTimeout(()=>{ if(b.parentNode) b.parentNode.removeChild(b); },3100);
+}
+
+// ----- 音(WebAudioビープのみ・外部音源なし) -----
+function unlockAudio(){
+  if(D.audioReady) return;
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx) return;
+    D.audioCtx=new Ctx();
+    if(D.audioCtx.state==="suspended") D.audioCtx.resume();
+    // 無音1サンプルを即再生して音声デバイスをスリープから起こす(初回再生のレイテンシ低減)
+    try{ const wb=D.audioCtx.createBuffer(1,1,22050); const ws=D.audioCtx.createBufferSource(); ws.buffer=wb; ws.connect(D.audioCtx.destination); ws.start(0); }catch(e){}
+    D.audioReady=true;
+    if(state.settings.bgm) startBGM();   // 初回操作でBGM開始(自動再生ポリシー対応)
+  }catch(e){}
+}
+function blip(freq,dur){
+  if(!state.settings.sound||!D.audioReady||!D.audioCtx) return;
+  try{
+    const ctx=D.audioCtx, t=ctx.currentTime;
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type="triangle"; o.frequency.value=freq||600;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.12,t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+(dur||0.08));
+    o.connect(g);g.connect(ctx.destination);
+    o.start(t);o.stop(t+(dur||0.08)+0.02);
+  }catch(e){}
+}
+
+// ----- BGM (WebAudioのみ・外部音源なし・軽量チップチューンのループ) -----
+const BGM_STEP=0.30; // 1ステップ秒(=8分音符相当)
+const BGM_MELODY=[523,0,659,784,659,0,587,659, 523,0,440,523,392,0,440,0, 587,0,659,784,880,784,659,587, 523,0,494,440,392,0,0,0];
+const BGM_BASS  =[131,0,131,0,165,0,196,0, 131,0,131,0,147,0,165,0, 110,0,110,0,131,0,147,0, 98,0,98,0,131,0,196,0];
+let _bgm={on:false,timer:null,idx:0,next:0,bus:null};
+function bgmTone(freq,t,dur,type,vol){
+  if(!freq||!_bgm.bus||!D.audioCtx) return;
+  const ctx=D.audioCtx, o=ctx.createOscillator(), g=ctx.createGain();
+  o.type=type; o.frequency.value=freq;
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol,t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur*0.85);
+  o.connect(g); g.connect(_bgm.bus); o.start(t); o.stop(t+dur+0.02);
+}
+function bgmSchedule(){
+  if(!_bgm.on||!D.audioCtx) return;
+  const ctx=D.audioCtx;
+  while(_bgm.next < ctx.currentTime+0.3){
+    const i=_bgm.idx % BGM_MELODY.length;
+    bgmTone(BGM_MELODY[i], _bgm.next, BGM_STEP, "triangle", 0.18);
+    if(i%2===0) bgmTone(BGM_BASS[i], _bgm.next, BGM_STEP*1.9, "sine", 0.16);
+    _bgm.next += BGM_STEP; _bgm.idx++;
+  }
+}
+function startBGM(){
+  if(_bgm.on) return;
+  _bgm.on=true;                       // 先にフラグを立て、unlockAudio経由の再入を防ぐ
+  unlockAudio();
+  if(!D.audioCtx){ _bgm.on=false; return; }
+  if(!_bgm.bus){ _bgm.bus=D.audioCtx.createGain(); _bgm.bus.gain.value=0.0001; _bgm.bus.connect(D.audioCtx.destination); }
+  if(D.audioCtx.state!=="running"){ try{D.audioCtx.resume();}catch(e){} }
+  _bgm.idx=0; _bgm.next=D.audioCtx.currentTime+0.05;
+  const t=D.audioCtx.currentTime;
+  _bgm.bus.gain.cancelScheduledValues(t);
+  _bgm.bus.gain.setValueAtTime(0.08,t);                 // 可聴域から開始(無音→急上昇の指数フェードを避ける)
+  _bgm.bus.gain.linearRampToValueAtTime(0.5,t+0.3);     // 短い線形フェードイン(素早く聞こえる)
+  if(_bgm.timer) clearInterval(_bgm.timer);
+  _bgm.timer=setInterval(bgmSchedule,70);
+  bgmSchedule();
+}
+function stopBGM(){
+  if(!_bgm.on) return;
+  _bgm.on=false;
+  if(_bgm.timer){ clearInterval(_bgm.timer); _bgm.timer=null; }
+  if(_bgm.bus&&D.audioCtx){ const t=D.audioCtx.currentTime; _bgm.bus.gain.cancelScheduledValues(t); _bgm.bus.gain.setValueAtTime(Math.max(0.0001,_bgm.bus.gain.value),t); _bgm.bus.gain.exponentialRampToValueAtTime(0.0001,t+0.4); }
+}
+// タイトルバーの音ON/OFF(マスター): SE・BGMをまとめて切替
+function isSoundOn(){ return !!(state.settings.sound||state.settings.bgm); }
+function updateSoundBtn(){ const b=document.getElementById("soundBtn"); if(!b) return; const on=isSoundOn(); b.textContent=on?"🔊":"🔇"; b.classList.toggle("off",!on); b.setAttribute("aria-pressed",on?"true":"false"); }
+function toggleMasterSound(){
+  unlockAudio();
+  const turnOn=!isSoundOn();
+  state.settings.sound=turnOn; state.settings.bgm=turnOn;
+  if(turnOn) startBGM(); else stopBGM();
+  updateSoundBtn();
+  D.saveDirty=true;
+  if(currentTab==="settings"){ D.dirtyPanel=true; renderPanel(true); }
+}
+
+// ----- トースト -----
+const toastTimers=[];
+function toast(msg,opts){
+  if(_ffQuiet) return;
+  opts=opts||{};
+  const root=document.getElementById("toastRoot");
+  if(!root) return;
+  while(root.children.length>=3) root.removeChild(root.firstChild);
+  const el=document.createElement("div");
+  el.className="toast"+(opts.type&&opts.type!=="info"?" "+opts.type:"");
+  const life=opts.ms||2600;
+  el.style.setProperty("--life",(life-400)+"ms");
+  el.textContent=msg;
+  root.appendChild(el);
+  const id=setTimeout(()=>{ if(el.parentNode)el.parentNode.removeChild(el); },life);
+  toastTimers.push(id);
+  if(toastTimers.length>20){ clearTimeout(toastTimers.shift()); }
+}
+
+/* =====================================================================
+   B7  RENDER
+   ===================================================================== */
+const dom={};
+function cacheDom(){
+  ["stageLabel","bossTag","stageProgFill","hhkVal","dpsVal","hpbar","hpfill","hpText","bossSvgRoot","bossWrap","partyRow","playerChar","panel","battle"].forEach(id=>{
+    dom[id]=document.getElementById(id);
+  });
+}
+let _lastHud={};
+function renderHUD(){
+  const s=state.stage.index;
+  const sl="STAGE "+formatNumber(s);   // 深層は万進表記(249.7万など)。快進撃/記録タブと統一し折り返しを防ぐ
+  if(_lastHud.sl!==sl){dom.stageLabel.textContent=sl;_lastHud.sl=sl;}
+  const showBoss=state.bahamut.isBoss;
+  if(_lastHud.boss!==showBoss){dom.bossTag.style.display=showBoss?"inline-block":"none";_lastHud.boss=showBoss;}
+  // stage進行ゲージ = ステージ内HP残比率の逆 (見た目用)
+  const prog=clamp(1-Bg(state.bahamut.hp).div(state.bahamut.maxHp).toNumber(),0,1);
+  const pw=(prog*100).toFixed(1)+"%";
+  if(_lastHud.pw!==pw){dom.stageProgFill.style.width=pw;_lastHud.pw=pw;}
+  const hv=formatNumber(state.hihiirokane);
+  if(_lastHud.hv!==hv){dom.hhkVal.textContent=hv;_lastHud.hv=hv;}
+  const dv="DPS "+formatNumber(D.dps)+((state.prestige.cores>=1)?"  ⚡×"+formatNumber(prestigeMult()):"");   // 倍率は竜核1個目から効いているので1個から表示(表示と実態の一致)
+  if(_lastHud.dv!==dv){dom.dpsVal.textContent=dv;_lastHud.dv=dv;}
+  // HPバー(transformで)
+  const ratio=clamp(Bg(state.bahamut.hp).div(state.bahamut.maxHp).toNumber(),0,1);
+  dom.hpfill.style.transform="scaleX("+ratio+")";
+  const ht=formatNumber(state.bahamut.hp)+" / "+formatNumber(state.bahamut.maxHp);
+  if(_lastHud.ht!==ht){dom.hpText.textContent=ht;dom.hpbar.setAttribute("aria-valuetext",ht);_lastHud.ht=ht;}
+  // スクリーンリーダー向け進捗(整数%の差分時のみ更新して連呼を抑制)
+  const pct=Math.round(ratio*100);
+  if(_lastHud.hpPct!==pct){dom.hpbar.setAttribute("aria-valuenow",pct);_lastHud.hpPct=pct;}
+}
+function renderBahamutSvg(){
+  ensureBossAnims();
+  const root=dom.bossSvgRoot||document.getElementById("bossSvgRoot");
+  root.classList.remove("boss-breathe");
+  root.innerHTML=bahamutSvg(state.bahamut.tier);
+  _renderedTier=state.bahamut.tier;
+  void root.offsetWidth;
+  if(state.settings.motion) root.classList.add("boss-breathe");
+}
+function renderParty(){
+  const owned=GIRLS.filter(g=>state.girls[g.id]&&state.girls[g.id].owned);
+  const row=dom.partyRow;
+  // 差分: 顔ぶれが変わった時だけ作り直す
+  const sig=owned.map(g=>g.id).join(",");
+  if(row._sig===sig) return;
+  row._sig=sig;
+  row.innerHTML="";
+  const list=owned.slice(0,6);
+  const mk=(g,i)=>{
+    const d=document.createElement("div");
+    d.className="partyMini"+(state.settings.motion?" pm-bob":"");
+    d.style.animationDelay=(i*0.25)+"s";
+    d.dataset.gid=g.id;
+    d.innerHTML=girlSvg(g);
+    return d;
+  };
+  // 中央に主人公ぶんのスペーサーを置き、仲間を左右に分割。少ない側は透明枠で数を揃え中央を保つ
+  const half=Math.ceil(list.length/2);
+  const L=list.slice(0,half), R=list.slice(half);
+  L.forEach((g,i)=>row.appendChild(mk(g,i)));
+  const sp=document.createElement("div"); sp.className="pmSpacer"; sp.setAttribute("aria-hidden","true"); row.appendChild(sp);
+  R.forEach((g,i)=>row.appendChild(mk(g,half+i)));
+  for(let i=R.length;i<L.length;i++){ const gh=document.createElement("div"); gh.className="partyMini pmGhost"; gh.setAttribute("aria-hidden","true"); row.appendChild(gh); }
+}
+function partyAttackAnim(){
+  if(!state.settings.motion) return;
+  const kids=dom.partyRow.querySelectorAll(".partyMini:not(.pmGhost)");
+  if(kids.length===0) return;
+  const k=kids[(Math.random()*kids.length)|0];
+  k.classList.remove("pm-attack"); void k.offsetWidth; k.classList.add("pm-attack");
+}
+function renderPlayer(){
+  const el=dom.playerChar||document.getElementById("playerChar");
+  if(el) el.innerHTML=playerSvg();
+}
+// 主人公の攻撃モーション(タップ=剣を振る / cls指定で必殺の大振り)
+function playerAttackAnim(cls){
+  if(!state.settings.motion) return;
+  const el=dom.playerChar; if(!el) return;
+  el.classList.remove("player-attack","player-super");
+  void el.offsetWidth;
+  el.classList.add(cls||"player-attack");
+}
+
+// ----- 必殺ゲージ -----
+const SUPER_DPS_SECONDS=25; // 発動時に「現在DPSのN秒分」を上乗せ
+const SUPER_TAP_HITS=40;    // 確定クリティカルのタップ何発分かを上乗せ(必殺の主火力)
+function superReady(){ return state.super.charge>=state.super.max; }
+function buildSuperBar(){
+  const root=document.getElementById("superBar");
+  if(!root) return;
+  root.innerHTML=`<div class="superWrap">
+    <span class="superLbl">必殺</span>
+    <div class="superTrack"><div class="superFill" id="superFill"></div></div>
+    <button id="superBtn" type="button">ためる</button>
+  </div>`;
+  dom.superFill=document.getElementById("superFill");
+  dom.superBtn=document.getElementById("superBtn");
+  dom.superBtn.addEventListener("click",(e)=>{ e.preventDefault(); unlockAudio(); fireSuper(); });
+}
+let _lastSuperState=null;
+function renderSuper(){
+  const root=document.getElementById("superBar");
+  if(!root) return;
+  // 仲間がいる/タップ強化が進んだら表示(アクティブ層が成立してから出す)
+  const owned=GIRLS.some(g=>state.girls[g.id]&&state.girls[g.id].owned);
+  const visible=owned||(state.upgrades.tapPower||0)>0||state.super.charge>0;
+  root.classList.toggle("active",visible);
+  if(!visible) return;
+  if(!dom.superFill) return;
+  const ratio=clamp(state.super.charge/Math.max(1,state.super.max),0,1);
+  const ready=superReady();
+  const key=Math.round(ratio*100)+"|"+(ready?1:0);
+  if(_lastSuperState===key) return;
+  _lastSuperState=key;
+  dom.superFill.style.width=(ratio*100).toFixed(0)+"%";
+  dom.superBtn.classList.toggle("ready",ready);
+  dom.superBtn.disabled=!ready;
+  dom.superBtn.textContent=ready?"必殺！":"ためる";
+}
+function addSuperCharge(n){
+  if(superReady()) return;
+  state.super.charge=Math.min(state.super.max,state.super.charge+n);
+  D.dirtyHUD=true;
+}
+// 必殺技SE: 他のSE(三角/サイン波の柔らかいチップチューン)に寄せた爽快フルール。
+// 駆け上がりアルペジオ → きらめく大和音(シャーン) → 丸い低音の重み。
+function superSE(){
+  if(!state.settings.sound||!D.audioReady||!D.audioCtx) return;
+  try{
+    const ctx=D.audioCtx, t0=ctx.currentTime;
+    const tone=(freq,start,dur,vol,type)=>{
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type=type||"triangle"; o.frequency.value=freq;
+      g.gain.setValueAtTime(0.0001,start);
+      g.gain.exponentialRampToValueAtTime(vol,start+0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001,start+dur);
+      o.connect(g); g.connect(ctx.destination); o.start(start); o.stop(start+dur+0.04);
+    };
+    // (1) 駆け上がる上昇アルペジオ(ズバッ)
+    [523,659,784,1047,1319].forEach((f,i)=> tone(f, t0+i*0.042, 0.13, 0.14));
+    // (2) きらめく大和音(シャーン)。重ねすぎて厚くならないよう本数・音量を少し控えめに
+    const tc=t0+0.21;
+    [1047,1319,1568,2093].forEach(f=> tone(f, tc, 0.5, 0.085));
+    tone(2637, tc, 0.34, 0.035, "sine");   // 倍音きらめきは1本だけ
+    // (3) 丸い低音の重み(柔らかいブン)
+    tone(110, tc, 0.55, 0.12, "sine");
+    tone(165, tc, 0.45, 0.07, "sine");
+  }catch(e){}
+}
+function superSlash(){
+  const fl=document.getElementById("flashLayer"); if(!fl) return;
+  const s=document.createElement("div"); s.className="superslash"; fl.appendChild(s);
+  setTimeout(()=>{ if(s.parentNode) s.parentNode.removeChild(s); },440);
+}
+function fireSuper(){
+  if(!superReady()) return;
+  state.super.charge=0;
+  D.dirtyHUD=true; D.saveDirty=true;
+  // 確定クリティカル級の大連撃: タップ威力 × クリ倍率 × SUPER_TAP_HITS + 現在DPSのN秒分
+  const cr=getCrit();
+  const dmg=Bg(D.tapDmg).mul(cr.mult*SUPER_TAP_HITS).add(Bg(D.dps).mul(SUPER_DPS_SECONDS));   // Big
+  const ctr=rectCenter();
+  // 余剰ダメージは gameTick 同様に繰り越して複数撃破
+  let rem=dmg, kills=0; const MAX=rushKillBase();   // 必殺の繰り越し上限も登り直しスケールに追従
+  while(!rem.isZero() && kills<MAX){
+    const hp=state.bahamut.hp;
+    if(rem.gte(hp)){ rem=rem.sub(hp); _burstKill=(kills+1<MAX)&&rem.gte(bahamutHp(state.stage.index+1)); dealDamage(hp,{source:"super",silent:true}); _burstKill=false; kills++; }
+    else { dealDamage(rem,{source:"super",silent:true}); rem=BIG0; }
+  }
+  rushMark(kills,nowMs());   // 必殺の多重撃破も快進撃演出の対象
+  // 演出: ズバシャーン
+  if(state.settings.damageNumbers) spawnDamageNumber(dmg,ctr.x,ctr.y-10,true,false,true);
+  if(state.settings.motion){
+    superSlash();
+    playerAttackAnim("player-super");
+    spawnHitSpark(null,null,true); spawnHitSpark(null,null,true);
+    screenShake(16); flashBoss();
+    const fl=document.getElementById("flashLayer"); if(fl){ const f=document.createElement("div"); f.className="bigflash"; fl.appendChild(f); setTimeout(()=>f.remove(),300); }
+  }
+  superSE();
+  const sp=pickSpeaker(); if(sp) showVoiceLine(sp,"defeat");
+}
+
+// パネル(タブ)
+let currentTab="girls";
+function renderPanel(force){
+  if(!D.dirtyPanel&&!force) return;
+  // 設定タブはフォーム要素(エクスポート/インポートのtextarea)を含むため、オート討伐由来の自動再描画では作り直さない
+  // (毎フレーム再生成するとフォーカス/入力中の文字が消える)。タブ切替・トグル等の強制時のみ再描画。
+  if(currentTab==="settings" && !force){ D.dirtyPanel=false; return; }
+  D.dirtyPanel=false;
+  const p=dom.panel;
+  if(currentTab==="girls") renderGirls(p);
+  else if(currentTab==="upgrades") renderUpgrades(p);
+  else if(currentTab==="prestige") renderPrestige(p);
+  else if(currentTab==="records") renderRecords(p);
+  else if(currentTab==="settings") renderSettings(p);
+}
+function gemMini(){return `<svg class="gem" viewBox="0 0 24 24"><polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="#FFD98A" stroke="#F25C7A" stroke-width="1.6"/></svg>`;}
+function renderGirls(p){
+  let html=`<div class="panelHead">🌸 仲間たち — 自動でバハムートと戦ってくれるよ</div>`;
+  if((state.prestige.cores||0)>=30) html+=`<button class="buyAllBtn" data-action="buyall">💰 安い順にまとめて強化（仲間も）</button>`;  // 竜核30個(旧3個と等価)で解放(転生のごほうびQoL)
+  // 主人公(あなた)カード: 1タップのダメージを表示
+  { const cr=getCrit();
+    html+=`<div class="card">
+      <div class="girlMini">${playerSvg()}</div>
+      <div class="cardBody">
+        <div class="cardTitle">あなた <span class="lv" style="background:linear-gradient(100deg,#FFD98A,#FF8A5B);color:#fff">主人公</span> <span class="roleIcon">🗡️</span></div>
+        <div class="cardDesc">タップでバハムートを攻撃！</div>
+        <div class="cardEff">1タップ ${formatNumber(D.tapDmg)}　会心 ${Math.round(cr.chance*100)}%×${cr.mult.toFixed(2)}</div>
+      </div>
+    </div>`;
+  }
+  const _cr=getCrit(), _cf=1+_cr.chance*(_cr.mult-1);   // 会心期待値(computeDPSと同じ係数) — 表示をHUDのDPS内訳と一致させる
+  GIRLS.forEach((g,idx)=>{
+    const st=state.girls[g.id];
+    const owned=st&&st.owned;
+    const unlocked=state.stage.highest>=RECRUIT_STAGE[idx];
+    if(owned){
+      const T=st.tier||0;
+      const dps=prestigeMult().mul(girlDps(g,T,st.level)*(1+(state.upgrades.partyDps||0)*0.08)*_cf);
+      const title=(CLASS_TITLES[g.id]&&CLASS_TITLES[g.id][T])||g.title;
+      const tierBadge=T>0?` <span class="lv" style="background:linear-gradient(100deg,#FFD98A,#FF8A5B);color:#fff">★${T}</span>`:"";
+      let btn;
+      if(st.level<LCAP){
+        const cost=costOf("girl",g.id,st.level,T); const can=Bg(state.hihiirokane).gte(cost);
+        btn=`<button class="buyBtn${can?"":" locked"}" data-action="levelup" data-id="${g.id}">レベルUP<span class="bc">${gemMini()}${formatNumber(cost)}</span></button>`;
+      } else if(T<NCLASS-1){
+        const ccStage=classChangeStage(g.id);
+        if(state.stage.highest<ccStage){
+          btn=`<span class="locktag">🔒 STAGE${ccStage}で覚醒</span>`;
+        } else {
+          const cc=classChangeCost(g.id); const can=Bg(state.hihiirokane).gte(cc);
+          const style=can?' style="background:linear-gradient(100deg,#FFD98A,#FF8A5B)"':'';
+          btn=`<button class="buyBtn${can?"":" locked"}"${style} data-action="classchange" data-id="${g.id}">⭐クラスチェンジ<span class="bc">${gemMini()}${formatNumber(cc)}</span></button>`;
+        }
+      } else {
+        btn=`<span class="locktag">★MAX(極)</span>`;
+      }
+      html+=`<div class="card">
+        <div class="girlMini">${girlSvg(g)}</div>
+        <div class="cardBody">
+          <div class="cardTitle">${g.name} <span class="lv">Lv.${st.level}/${LCAP}</span>${tierBadge} <span class="roleIcon">${g.roleIcon}</span></div>
+          <div class="cardDesc">${title}</div>
+          <div class="cardEff">DPS ${formatNumber(dps)}</div>
+        </div>
+        ${btn}
+      </div>`;
+    } else if(unlocked){
+      const can=Bg(state.hihiirokane).gte(g.recruit);
+      html+=`<div class="card">
+        <div class="girlMini" style="opacity:.85">${girlSvg(g)}</div>
+        <div class="cardBody">
+          <div class="cardTitle">${g.name} <span class="roleIcon">${g.roleIcon}</span></div>
+          <div class="cardDesc">${g.title}</div>
+          <div class="cardEff">基礎DPS ${formatNumber(g.baseDps)}</div>
+        </div>
+        <button class="buyBtn${can?"":" locked"}" data-action="recruit" data-id="${g.id}">
+          仲間にする<span class="bc">${gemMini()}${formatNumber(g.recruit)}</span>
+        </button>
+      </div>`;
+    } else {
+      html+=`<div class="card" style="opacity:.6">
+        <div class="girlMini" style="filter:grayscale(1) brightness(1.1)">${girlSvg(g)}</div>
+        <div class="cardBody">
+          <div class="cardTitle">？？？ <span class="roleIcon">${g.roleIcon}</span></div>
+          <div class="cardDesc">ステージ ${RECRUIT_STAGE[idx]} 到達で出会えるよ</div>
+        </div>
+        <span class="locktag">🔒 STAGE${RECRUIT_STAGE[idx]}</span>
+      </div>`;
+    }
+  });
+  p.innerHTML=html;
+}
+function renderUpgrades(p){
+  let html=`<div class="panelHead">⚔️ 強化ショップ — ヒヒイロカネで強くなろう</div>`;
+  if((state.prestige.cores||0)>=30) html+=`<button class="buyAllBtn" data-action="buyall">💰 安い順にまとめて強化（仲間も）</button>`;  // 竜核30個(旧3個と等価)で解放(転生のごほうびQoL)
+  UPGRADES.forEach(u=>{
+    const lv=state.upgrades[u.id]||0;
+    const maxed=u.max!=null&&lv>=u.max;
+    const cost=costOf("upgrade",u.id,lv);
+    const can=!maxed&&Bg(state.hihiirokane).gte(cost);
+    html+=`<div class="card">
+      <div class="roleIcon" style="background:#FFF0E0">${u.icon}</div>
+      <div class="cardBody">
+        <div class="cardTitle">${u.name} <span class="lv${maxed?" maxlv":""}">Lv.${lv}${u.max!=null?"/"+u.max:""}</span></div>
+        <div class="cardDesc">${u.desc}</div>
+        <div class="cardEff">${u.eff(lv)}</div>
+      </div>
+      ${maxed
+        ? `<button class="buyBtn locked" data-action="none">MAX</button>`
+        : `<button class="buyBtn${can?"":" locked"}" data-action="buyupg" data-id="${u.id}">強化<span class="bc">${gemMini()}${formatNumber(cost)}</span></button>`}
+    </div>`;
+  });
+  p.innerHTML=html;
+}
+function renderPrestige(p){
+  const can=canPrestige();
+  const cores=prestigeGain();
+  const nextMult=powB(PRES_FACTOR,((state.prestige.cores||0)+cores)/10);
+  const gritN=Math.floor((state.prestige.grit||0)*10);   // ふんばり=180秒で竜核10個ぶん(1桁)
+  let html=`<div class="panelHead">🐉 転生(竜核を捧げる) — 全進行をリセットし永久に強化</div>`;
+  html+=`<div class="card" style="flex-direction:column;align-items:stretch;gap:6px">
+    <div class="cardEff" style="font-size:13px">現在の転生ボーナス: 全ダメージ・全報酬 ×${formatNumber(prestigeMult())}</div>
+    <div class="cardDesc">竜核: ${formatNumber(state.prestige.cores)}（10個で ×${PRES_FACTOR}） ／ 転生回数: ${state.prestige.count}</div>
+    <div class="cardDesc">到達最高ステージ: ${formatNumber(state.stage.highest)}</div>
+    ${gritN>=1?`<div class="cardDesc">🔥 ふんばり: <b>+${formatNumber(gritN)}</b> 竜核ぶん — 新しいステージで戦った時間だけ増えて、倒した瞬間の竜核のもとに乗るよ（タップでも加速！転生でリセット）</div>`:""}
+  </div>`;
+  if(can){
+    html+=`<div class="card" style="flex-direction:column;align-items:stretch;gap:8px">
+      <div class="cardTitle">いま転生すると…</div>
+      <div class="cardEff">竜核 +${formatNumber(cores)}　→　ボーナス ×${formatNumber(nextMult)} に強化！</div>
+      <div class="cardDesc">ステージ・仲間・強化・ヒヒイロカネ・ふんばりはすべて初期化されるけど、2周目は一気に駆け抜けられるよ。</div>
+      <button class="buyBtn" data-action="prestige" style="min-width:0;padding:12px">竜核を捧げて転生する</button>
+    </div>`;
+  } else {
+    // 解放条件を2つとも実数値で表示(実際に転生可能になる値とカウントを一致させる)
+    const life=prestigeLifeIfNow();
+    const target=powB(10, PRES_LOG0 + ((state.prestige.cores||0)+1)/10);   // 竜核+1に必要な生涯獲得ヒヒ = 10^(PRES_LOG0+(cores+1)/10)
+    const okStage=state.stage.highest>=50;
+    const okLife=life.gte(target);   // 通常ここはfalse(両方trueならcan=true)
+    const row=(ok,label,now)=>`<div class="cardDesc" style="display:flex;gap:6px;align-items:baseline"><span>${ok?"✅":"🔒"}</span><span><b>${label}</b><br>${now}</span></div>`;
+    html+=`<div class="card" style="flex-direction:column;align-items:stretch;gap:6px"><div class="cardTitle">🔒 転生の解放条件（2つとも満たすと解放）</div>`
+        + row(okStage, "ステージ 50 に到達する", okStage?"到達済み！":`いま ステージ ${state.stage.highest}（あと ${50-state.stage.highest}）`)
+        + row(okLife, `生涯獲得ヒヒ ${formatNumber(target)} を貯める`, `いま ${formatNumber(life)}`)
+        + `<div class="cardDesc">生涯獲得ヒヒは転生しても減らない竜核用のカウントだよ。※すでに踏破したステージ（${formatNumber(state.stats.bestStage||0)} 以下）を登り直しても増えないよ。</div></div>`;
+  }
+  p.innerHTML=html;
+}
+function renderSettings(p){
+  const s=state.settings;
+  const tg=(on)=>`toggle${on?" on":""}`;
+  let html=`<div class="panelHead">⚙️ 設定</div>
+  <div class="setRow"><div><div class="lbl">効果音 / ボイス</div><div class="sub">SEと簡易ボイスのON/OFF</div></div><div class="${tg(s.sound)}" data-action="toggle" data-key="sound" role="switch" aria-checked="${s.sound}" tabindex="0" aria-label="効果音"></div></div>
+  <div class="setRow"><div><div class="lbl">BGM</div><div class="sub">かわいいループBGMのON/OFF</div></div><div class="${tg(s.bgm)}" data-action="toggle" data-key="bgm" role="switch" aria-checked="${s.bgm}" tabindex="0" aria-label="BGM"></div></div>
+  <div class="setRow"><div><div class="lbl">演出(モーション)</div><div class="sub">粒子・シェイク・アニメ</div></div><div class="${tg(s.motion)}" data-action="toggle" data-key="motion" role="switch" aria-checked="${s.motion}" tabindex="0" aria-label="演出"></div></div>
+  <div class="setRow"><div><div class="lbl">ダメージ数字</div><div class="sub">タップ時の数字ポップ</div></div><div class="${tg(s.damageNumbers)}" data-action="toggle" data-key="damageNumbers" role="switch" aria-checked="${s.damageNumbers}" tabindex="0" aria-label="ダメージ数字"></div></div>
+  <div class="setRow"><div><div class="lbl">バイブ(対応端末)</div><div class="sub">タップの触覚フィードバック</div></div><div class="${tg(s.haptics)}" data-action="toggle" data-key="haptics" role="switch" aria-checked="${s.haptics}" tabindex="0" aria-label="バイブ"></div></div>
+  <div class="setLine">タップ数・撃破履歴などは「記録」タブで見られます。</div>
+  <div class="panelHead" style="margin-top:6px">📦 データの引き継ぎ・バックアップ</div>
+  <div class="setLine">キーをコピーして保管すれば、別の端末へ移したり復元できるよ。</div>
+  <div class="ioBox">
+    <div class="lbl" style="padding:2px 2px 4px">📤 エクスポート（キーを作る）</div>
+    <button class="buyBtn" data-action="export" style="width:100%;min-width:0">🔑 キーを作成</button>
+    <textarea id="exportKey" readonly placeholder="「キーを作成」を押すとここに表示されるよ" style="width:100%;min-height:56px;margin:6px 0;border-radius:10px;border:1.5px solid #FFD3E4;padding:8px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;resize:vertical;box-sizing:border-box;color:#7a5a66;background:#FFF8FB"></textarea>
+    <button class="buyBtn" data-action="copyexport" style="width:100%;min-width:0;background:linear-gradient(100deg,#A7E2F2,#7FD8E8)">📋 コピー</button>
+  </div>
+  <div style="height:2px;background:linear-gradient(90deg,transparent,#FFD3E4 50%,transparent);margin:10px 10px"></div>
+  <div class="ioBox">
+    <div class="lbl" style="padding:2px 2px 4px">📥 インポート（キーで戻す）</div>
+    <textarea id="importKey" placeholder="ここにキーを貼り付けてね" style="width:100%;min-height:56px;margin:6px 0;border-radius:10px;border:1.5px solid #C9A7F0;padding:8px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;resize:vertical;box-sizing:border-box;color:#7a5a66;background:#FBF8FF"></textarea>
+    <div style="display:flex;gap:6px">
+      <button class="buyBtn" data-action="pasteimport" style="flex:1;min-width:0;background:linear-gradient(100deg,#C9A7F0,#A77FE0)">📋 貼り付け</button>
+      <button class="dangerBtn" data-action="import" style="flex:1;min-width:0">📥 読み込む</button>
+    </div>
+    <div class="setLine">インポートすると今のデータは上書きされます。心配なら先に自分のキーをエクスポートして保管してね。</div>
+  </div>
+  <div style="padding:8px 6px"><button class="dangerBtn" data-action="hardreset">🗑️ はじめからやり直す(全消去)</button></div>
+  <div class="setLine">セーブは自動。ヒヒイロカネ・クリッカー v${VERSION}。すべての進行はこの端末のブラウザに保存されます。</div>`;
+  p.innerHTML=html;
+}
+// 時刻 HH:MM:SS / プレイ時間整形
+function fmtClock(ms){ const d=new Date(ms); const p=n=>String(n).padStart(2,"0"); return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds()); }
+function fmtDuration(ms){ let s=Math.floor(ms/1000); const h=Math.floor(s/3600); s-=h*3600; const m=Math.floor(s/60); s-=m*60; if(h>0) return h+"時間"+m+"分"; if(m>0) return m+"分"+s+"秒"; return s+"秒"; }
+function renderRecords(p){
+  const st=state.stats;
+  const critRate = st.totalTaps>0 ? Math.round(st.totalCrits/st.totalTaps*100) : 0;
+  const cell=(k,v)=>`<div class="recCell"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  let html=`<div class="panelHead">📜 記録 — 冒険のあゆみ</div>`;
+  html+=`<div class="recGrid">`
+      + cell("最高到達(通算)", "STAGE "+formatNumber(Math.max(st.bestStage||0, state.stage.highest)))
+      + cell("現在ステージ", "STAGE "+formatNumber(state.stage.index))
+      + cell("累計撃破", formatNumber(st.bahamutDefeated)+" 体")
+      + cell("総タップ", formatNumber(st.totalTaps)+" 回")
+      + cell("会心", formatNumber(st.totalCrits)+" 回 ("+critRate+"%)")
+      + cell("プレイ時間", fmtDuration(st.playTimeMs))
+      + cell("総獲得(通算)", formatNumber(Bg(state.stats.totalEarnedAll||0)))
+      + cell("転生", state.prestige.count+" 回 ×"+formatNumber(prestigeMult()))
+      + `</div>`;
+  const kills=st.recentKills||[];
+  html+=`<div class="panelHead" style="margin-top:4px">⚔️ 討伐履歴 — 最新${kills.length}件</div>`;
+  if(kills.length===0){
+    html+=`<div class="setLine" style="text-align:center">まだ討伐記録がありません。バハムートを倒そう！</div>`;
+  } else {
+    html+=`<div class="recHist">`;
+    for(const k of kills){
+      html+=`<div class="recRow${k.boss?' boss':''}">`
+          + `<span class="rt">${fmtClock(k.t)}</span>`
+          + `<span class="rs">S${formatNumber(k.s)}</span>`
+          + `<span class="rn">${k.boss?'👑 ':''}${bahamutName(k.tier)}</span>`
+          + `<span class="rr">+${formatNumber(k.r)}</span>`
+          + `</div>`;
+    }
+    html+=`</div>`;
+  }
+  p.innerHTML=html;
+}
+
+/* =====================================================================
+   B6  LOOP
+   ===================================================================== */
+// ===== 快進撃(登り直し)演出と連打ブースト =====
+const RUSH_MIN_KILLS=30;   // この体数以上/回 の多重撃破で「快進撃」とみなす
+let _rushEl=null, _rushRate=0;
+// 登り直しの撃破上限: 基本値は通算bestの√でスケール(深いほど登り直しは長いが、比例ほどは伸びない=√best秒オーダー)。
+// 40万stage以下は従来の400のまま。放置の目安: 150万=約10分 / 1300万=約29分 / 1億=約82分。
+function rushKillBase(){
+  const best=state.stats.bestStage||0;
+  return Math.max(400, Math.round(0.65*Math.sqrt(best)));
+}
+// 連打ブースト: 自動DPSの1回あたり撃破上限が直近1秒のタップ回数に応じて増える(n回/秒 → (1+n)倍。5連打で約6倍)
+let _tapTimes=[];
+function rushKillCap(now){
+  while(_tapTimes.length && _tapTimes[0]<now-1000) _tapTimes.shift();
+  return rushKillBase()*(1+_tapTimes.length);
+}
+function rushMark(kills,t){
+  if(kills<RUSH_MIN_KILLS) return;
+  _rushRate=_rushRate*0.6+(kills/(AUTO_DMG_MS/1000))*0.4;   // 体数/秒(EMAで滑らかに)
+  D._rushAt=t;
+}
+let _rushHudEl=null;
+function updateRushFx(){
+  const active=state.settings.motion && D._rushAt && (nowMs()-D._rushAt)<900;
+  if(!active){ if(_rushEl){_rushEl.classList.remove("on");_rushHudEl.classList.remove("on");} return; }
+  if(!_rushEl){
+    _rushEl=document.createElement("div"); _rushEl.id="rushFx";        // 速度線(ダメージ数字の下)
+    _rushEl.innerHTML='<div class="lines"></div>';
+    dom.battle.appendChild(_rushEl);
+    _rushHudEl=document.createElement("div"); _rushHudEl.id="rushHud"; // 情報カード(ダメージ数字より前面)
+    _rushHudEl.innerHTML='<div class="badge">⚡ 快進撃！</div><div class="rate"></div><div class="bar"><i></i></div>';
+    dom.battle.appendChild(_rushHudEl);
+  }
+  _rushEl.classList.add("on"); _rushHudEl.classList.add("on");
+  const s=state.stage.index;
+  const best=Math.max(state.stats.bestStage||0,state.stage.highest);
+  const rate="STAGE "+formatNumber(s)+"（+"+formatNumber(Math.round(_rushRate))+"/秒）";
+  const bar=_rushHudEl.querySelector(".bar");
+  if(s<best){   // 既踏破ゾーンの登り直し中: 通算最高までの進捗バー
+    const p=Math.min(100,s/best*100);
+    bar.style.display="";
+    bar.firstChild.style.width=p.toFixed(1)+"%";
+    _rushHudEl.querySelector(".rate").textContent=rate+"・通算最高まで "+p.toFixed(0)+"%";
+  } else { bar.style.display="none"; _rushHudEl.querySelector(".rate").textContent=rate; }
+}
+function gameTick(){
+  if(D._noTick) return;   // インポート直後〜リロードまでは進行を止める(進行中の前進が新stateに適用されるのを防ぐ)
+  const t=nowMs();
+  let dt=(t-D.lastTickAt)/1000;
+  D.lastTickAt=t;
+  if(!Number.isFinite(dt)||dt<0) dt=TICK_MS/1000;
+  if(dt>1.5) dt=1.5; // 大きなギャップは上限(バックグラウンド復帰など)
+  state.stats.playTimeMs+=dt*1000;
+  // ふんばりボーナス: 新規ゾーン(通算bestより先)で戦っている時間を蓄積(180秒=1桁)。
+  // 倒した時に竜核のもと(totalEarned)へ×10^gritで反映=「倒すのに時間がかかるほど、倒した瞬間の竜核が大きい」
+  if(state.stage.index>(state.stats.bestStage||0)) state.prestige.grit=(state.prestige.grit||0)+dt/180;
+  // DPS適用: 仲間の攻撃を定周期で実HPへ適用。HPへは平均DPS(owed)をそのまま入れる。
+  // (会心は computeDPS の critFactor に既に内包済み。ここで通常/会心に割ると高critDamage建てで
+  //  通常ヒットが owed/cf まで小さくなり、巨大HPに対し桁落ち=ほぼ無反応・表示も小桁で「減らない」ように見える)
+  // 会心は表示の彩り(色/ラベル)だけに用い、与ダメージ量は owed 一定=滑らかに減る。
+  const dps=Bg(D.dps);
+  if(!dps.isZero()){
+    D._autoAcc=Bg(D._autoAcc||0).add(dps.mul(dt));        // この周期で与える平均ダメージを蓄積(Big)
+    if(t-(D._autoAt||0)>=AUTO_DMG_MS && !D._autoAcc.isZero()){
+      const owed=D._autoAcc; D._autoAcc=BIG0; D._autoAt=t;
+      const cr=getCrit(); const isCrit=Math.random()<cr.chance;
+      let dmg=owed;    // 実ダメージ=平均DPS(owed)。会心でも量は変えず(彩りのみ)
+      if(state.settings.damageNumbers) spawnDamageNumber(dmg,null,null,isCrit,true);     // auto=true: 非会心=小シアン / 会心=控えめゴールド「会心」
+      if(state.settings.motion) spawnHitSpark(null,null,false);                          // 粒子は通常量(タップ会心より控えめ)
+      // 1tickのキル上限は基本400。連打中はタップ回数/秒に応じて上限が増える(快進撃を連打で加速)
+      let kills=0; const MAXK=rushKillCap(t);
+      while(!dmg.isZero() && kills<MAXK){
+        const hp=state.bahamut.hp;
+        if(dmg.gte(hp)){
+          dmg=dmg.sub(hp);
+          const willKillAgain=(kills+1<MAXK)&&dmg.gte(bahamutHp(state.stage.index+1));   // 次ステージのHPで予測(現HP基準だと壁到達の最後の1体が討伐履歴に残らない)
+          _burstKill=willKillAgain;
+          dealDamage(hp,{source:"dps",silent:true});
+          _burstKill=false; kills++;
+        } else { dealDamage(dmg,{source:"dps",silent:true}); dmg=BIG0; }
+      }
+      rushMark(kills,t);   // 多重撃破が続く間は快進撃演出(見た目のみ)
+    }
+    // たまに攻撃モーション
+    if(state.settings.motion && Math.random()<0.25) partyAttackAnim();
+  }
+  // 自動セーブ
+  if(D.saveDirty && t-D.lastSaveAt>AUTOSAVE_MS){ save("auto"); }
+  D.dirtyHUD=true;
+}
+
+let _prevTs=0, _recAcc=0, _lastRenderTs=0;
+const RENDER_MIN_MS=32;   // 描画は約30fps上限(省電力。CSSアニメ/タップ演出は十分滑らか)
+function renderLoop(ts){
+  requestAnimationFrame(renderLoop);
+  if(ts-_lastRenderTs<RENDER_MIN_MS) return;   // フレーム間引き
+  const dt=_prevTs?Math.min((ts-_prevTs)/1000,0.05):0.016;
+  _prevTs=ts; _lastRenderTs=ts;
+  // HUD
+  if(D.dirtyHUD){ renderHUD(); renderSuper(); D.dirtyHUD=false; }
+  // バースト撃破で溜まったボスSVG再生成は1フレーム1回だけ(多重撃破時のフリーズ防止)
+  if(D.dirtyBoss){ renderBahamutSvg(); D.dirtyBoss=false; }
+  // 記録タブは表示中、約4Hzでプレイ時間などを即時更新
+  if(currentTab==="records"){ _recAcc+=dt; if(_recAcc>=0.25){ _recAcc=0; D.dirtyPanel=true; } }
+  // パネル
+  renderPanel(false);
+  // 快進撃演出(登り直し)
+  updateRushFx();
+  // FX進行
+  updateFx(dt);
+  // shake
+  if(D.shake>0.1){
+    D.shakeT+=dt;
+    const decay=Math.exp(-D.shakeT*9);
+    const mag=D.shake*decay;
+    const ox=(Math.random()*2-1)*mag;
+    const oy=(Math.random()*2-1)*mag;
+    dom.battle.style.transform=`translate(${ox.toFixed(1)}px,${oy.toFixed(1)}px)`;
+    D.shake*=Math.pow(0.001,dt); // 速い減衰
+    if(D.shake<0.2){D.shake=0;dom.battle.style.transform="";}
+  }
+}
+function updateFx(dt){
+  // ダメージ数字
+  for(let i=activeDmg.length-1;i>=0;i--){
+    const o=activeDmg[i];
+    o.t+=dt*1000;
+    const k=o.t/o.life;
+    if(k>=1){ retireDmg(o); activeDmg.splice(i,1); continue; }
+    let scale,op,yoff;
+    if(o.isCrit){
+      scale=k<0.15?(0.3+k/0.15*1.1):(k<0.3?(1.4-(k-0.15)/0.15*0.45):1.0);
+      op=k<0.2?k/0.2:(1-(k-0.2)/0.8);
+      yoff=-50*k;
+    } else {
+      scale=k<0.2?(0.6+k/0.2*0.55):1.0;
+      op=k<0.2?k/0.2:(1-(k-0.2)/0.8);
+      yoff=-46*k;
+    }
+    o.el.style.opacity=op.toFixed(2);
+    o.el.style.transform=`translate(calc(-50% + ${(o.dx*k).toFixed(1)}px),calc(-50% + ${yoff.toFixed(1)}px)) scale(${scale.toFixed(2)})`;
+  }
+  // 粒子
+  for(let i=activeParts.length-1;i>=0;i--){
+    const o=activeParts[i];
+    o.t+=dt*1000;
+    if(o.t>=o.life){ o.el.style.opacity="0"; partPool.push(o.el); activeParts.splice(i,1); continue; }
+    o.vy+=o.g*dt;
+    o.x+=o.vx*dt; o.y+=o.vy*dt; o.rot+=o.vr*dt;
+    const k=o.t/o.life;
+    o.el.style.left=o.x.toFixed(1)+"px";
+    o.el.style.top=o.y.toFixed(1)+"px";
+    o.el.style.opacity=(1-k).toFixed(2);
+    o.el.style.transform=`translate(-50%,-50%) rotate(${o.rot.toFixed(0)}deg)`;
+  }
+}
+
+/* =====================================================================
+   B9  INPUT
+   ===================================================================== */
+/* ---- 連打(オートクリッカー)検知: 直近60秒のタップ数を秒バケットで集計(配列は最大61要素)。
+   1000回「超」で全没収。警告→継続で発動。1分1000回=毎秒約16.7で人間にはほぼ不可能。
+   ※ローカル単体プレイなのでセーブ直編集での回避は可能。あくまで連打ツール対策のギミック。 ---- */
+const ANTISPAM_LIMIT=1000, ANTISPAM_WARN=500, ANTISPAM_TOOL_RATE=14, ANTISPAM_RESET_MS=10000;
+// ツール相当=直近1秒で14回以上の連打。そのときだけ累積し、10秒ツール相当が無ければ累積リセット。警告は50%(=500)で。
+let _spamCount=0, _spamRecent=[], _lastFastAt=0, _antiWarnAt=0, _antiCooldownUntil=0;
+// (旧 antiSpamCount[60秒ローリング窓]は廃止 → レート方式に変更。判定は antiSpamCheck 内)
+function antiSpamBubble(girlId,text){
+  const g=GIRL_BY_ID[girlId]; if(!g) return;
+  const layer=document.getElementById("bubbleLayer"); if(!layer) return;
+  while(layer.children.length>=2) layer.removeChild(layer.firstChild);
+  const b=document.createElement("div"); b.className="bubble "+nextBubbleSide();
+  b.innerHTML=`<span class="bmini">${girlSvg(g)}</span><span><span class="bname">${g.name}</span> ${text}</span>`;
+  layer.appendChild(b);
+  setTimeout(()=>{ if(b.parentNode) b.parentNode.removeChild(b); },3100);
+}
+function antiSpamPenalty(total){
+  const lost=state.hihiirokane;
+  state.hihiirokane=BIG0;
+  _spamCount=0; _spamRecent=[]; _lastFastAt=0; _antiCooldownUntil=nowMs()+2000;   // 判定リセット&短いクールダウン
+  D.dirtyHUD=true; D.dirtyPanel=true; D.saveDirty=true;
+  if(state.settings.motion) screenShake(11);
+  if(state.settings.sound) blip(140,0.4);
+  const sp=pickSpeaker(); const who=sp?GIRL_BY_ID[sp].name:"バハムート";
+  showModal(`<h2 id="modalTitle">⚠️ 連打ツールを検知！</h2>
+    <p>ツールのような超高速連打 <span class="big">${formatNumber(total)}</span> 回…<br>それは人間には無理だよね？</p>
+    <p>ペナルティとして<br>ヒヒイロカネ <span class="big">${formatNumber(lost)}</span> を<br><b>ぜんぶ没収</b>しました。</p>
+    <p style="opacity:.8">${who}「正々堂々と遊んでね！」</p>
+    <div class="modalBtns"><button class="mbtn-primary" id="mOk">ごめんなさい…</button></div>`);
+  const ok=document.getElementById("mOk"); if(ok) ok.onclick=hideModal;
+}
+// 戻り値 true で没収発動(このタップのダメージはスキップ)
+function antiSpamCheck(now){
+  if(now<_antiCooldownUntil) return false;
+  // 直近1秒の瞬間レートを測り、ツール相当(14回/秒以上)のときだけ累積。手動は加算されない。
+  _spamRecent.push(now);
+  while(_spamRecent.length && _spamRecent[0] < now-1000) _spamRecent.shift();
+  if(_spamRecent.length>=ANTISPAM_TOOL_RATE){ _lastFastAt=now; _spamCount++; }
+  if(now-_lastFastAt>=ANTISPAM_RESET_MS) _spamCount=0;   // 10秒間ツール相当の連打が無ければ判定リセット
+  if(_spamCount>ANTISPAM_LIMIT){ antiSpamPenalty(_spamCount); return true; }
+  if(_spamCount>=ANTISPAM_WARN && now-_antiWarnAt>4000){   // 閾値の50%(=500)で警告
+    _antiWarnAt=now;
+    toast("⚠️ 連打ツールはダメ！このまま続けるとヒヒイロカネ没収だよ…",{type:"warn",ms:3200});
+    const sp=pickSpeaker(); if(sp) antiSpamBubble(sp,"こらっ、連打ツールは禁止だよ！");
+    blip(240,0.18);
+  }
+  return false;
+}
+// タップ1回ぶんのダメージ適用(tapAttackと検証ffで共用)。
+// 1撃で倒せる状況(転生後の登り直し=快進撃中など)は余剰を繰り越して多重撃破 → 連打するほど登りが速くなる。
+function tapStrike(_now){
+  _tapTimes.push(_now);   // 連打ブースト用(直近1秒のタップ数 → 自動の撃破上限を引き上げ)
+  // 新規ゾーン(通算bestより先)ではタップ1回=ふんばり+2秒ぶん(連打で竜核のもとが育つ。5連打/秒なら実時間の約10倍速)
+  if(state.stage.index>(state.stats.bestStage||0)) state.prestige.grit=(state.prestige.grit||0)+2/180;
+  if(Bg(D.tapDmg).gte(Bg(state.bahamut.hp))){
+    const cr=getCrit(); const isCrit=Math.random()<cr.chance;
+    let rem=Bg(D.tapDmg); if(isCrit){ rem=rem.mul(cr.mult); state.stats.totalCrits++; }
+    const shown=rem;
+    let kills=0; const MAXK=rushKillBase();   // 1タップの繰り越し上限=自動1回ぶんの基本値(√bestスケール)
+    while(!rem.isZero() && kills<MAXK){
+      const hp=state.bahamut.hp;
+      if(rem.gte(hp)){ rem=rem.sub(hp); _burstKill=(kills+1<MAXK)&&rem.gte(bahamutHp(state.stage.index+1)); dealDamage(hp,{source:"tap-rush",silent:true}); _burstKill=false; kills++; }
+      else { dealDamage(rem,{source:"tap-rush",silent:true}); rem=BIG0; }
+    }
+    rushMark(kills,_now);
+    // 演出はタップ1回ぶんに集約(会心はdealDamageでなくここで判定済み)
+    if(state.settings.damageNumbers) spawnDamageNumber(shown,null,null,isCrit);
+    if(state.settings.motion) spawnHitSpark(null,null,isCrit);
+  } else {
+    dealDamage(D.tapDmg,{source:"tap",x:null,y:null});
+  }
+}
+function tapAttack(ev){
+  ev.preventDefault();
+  unlockAudio();
+  const _now=nowMs();
+  D.idleSince=_now;
+  // 連打ツール検知(800回で警告 / 1000回超で全没収)
+  if(antiSpamCheck(_now)) return;
+  state.stats.totalTaps++;
+  // 敵味方エリアのどこをタップしても、ダメージ表示/火花はバハムート周辺に出す
+  // (x,y=null → spawnDamageNumber/spawnHitSpark がボス中心＋ばらつきで描画)
+  tapStrike(_now);
+  // 必殺ゲージ蓄積(タップ1回=+1)
+  addSuperCharge(1);
+  // バウンス(boss-breathe と transform 競合しない #bossWrap 側へ当てる)
+  if(state.settings.motion){
+    const w=dom.bossWrap;
+    w.classList.remove("tap-bounce"); void w.offsetWidth; w.classList.add("tap-bounce");
+    playerAttackAnim();
+  }
+  blip(420+Math.random()*60,0.05);
+  // たまにタップボイス
+  if(Math.random()<0.10){ const sp=pickSpeaker(); if(sp) showVoiceLine(sp,"tap"); }
+  // オンボーディング
+  if(onboardActive){ obTapCount++; if(obTapCount>=3) endOnboard(); }
+}
+// ===== 強化/レベルアップの長押し連打: 1回目即時 → 1秒継続で秒20連打(50ms) =====
+// 発動ディレイ中はサークルタイマー(指/カーソルより上に表示)、発動後は「×N 連打中！」を表示。
+const HOLD_DELAY=1000, HOLD_INTERVAL=50;
+let _holdInitTimer=null, _holdRepeatTimer=null, _holdCombo=0, _holdFxEl=null, _holdRingEl=null, _rapidHold=false, _holdStarved=false, _ccHoldAt=0;
+function holdRingShow(x,y,cap){
+  const el=document.createElement("div"); el.id="holdRing"; el.style.left=x+"px"; el.style.top=(y-46)+"px";  // 指/カーソルより上に表示
+  el.innerHTML='<svg viewBox="0 0 48 48"><circle class="track" cx="24" cy="24" r="20"/><circle class="prog" cx="24" cy="24" r="20"/></svg><span class="hrIco">⚡</span><span class="hrCap">'+(cap||"長押しで連続上げ")+'</span>';
+  document.body.appendChild(el); _holdRingEl=el;
+}
+function holdFx(x,y,txt){
+  if(!_holdFxEl){ _holdFxEl=document.createElement("div"); _holdFxEl.id="holdFx"; _holdFxEl.style.left=x+"px"; _holdFxEl.style.top=(y-46)+"px"; document.body.appendChild(_holdFxEl); }  // 指の上
+  _holdFxEl.textContent=txt; _holdFxEl.classList.add("show");
+  _holdFxEl.classList.remove("pulse"); void _holdFxEl.offsetWidth; _holdFxEl.classList.add("pulse");
+}
+// クラスチェンジ発動の光る演出(押下位置に金色のバースト)
+function classChangeGlow(x,y){
+  if(!state.settings.motion) return;
+  const el=document.createElement("div"); el.className="ccGlow"; el.style.left=x+"px"; el.style.top=y+"px";
+  el.innerHTML='<span class="ccStar">⭐</span>';
+  document.body.appendChild(el);
+  setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); },680);
+}
+function holdStop(){
+  if(_holdInitTimer){ clearTimeout(_holdInitTimer); _holdInitTimer=null; }
+  if(_holdRepeatTimer){ clearInterval(_holdRepeatTimer); _holdRepeatTimer=null; }
+  _rapidHold=false; _holdStarved=false; _ccHoldAt=0;
+  if(_holdRingEl){ const r=_holdRingEl; _holdRingEl=null; if(r.parentNode) r.parentNode.removeChild(r); }
+  if(_holdFxEl){ const f=_holdFxEl; _holdFxEl=null; f.classList.remove("show"); setTimeout(()=>{ if(f.parentNode) f.parentNode.removeChild(f); },350); }
+}
+function holdStart(ev){
+  let el=ev.target;
+  while(el&&el!==dom.panel&&!el.dataset.action) el=el.parentElement;
+  if(!el||!el.dataset.action) return;
+  const a=el.dataset.action; if(a!=="buyupg"&&a!=="levelup"&&a!=="buyall") return;
+  const id=el.dataset.id;
+  holdStop(); _holdCombo=0; unlockAudio();
+  const px=(ev.clientX!=null?ev.clientX:window.innerWidth/2), py=(ev.clientY!=null?ev.clientY:window.innerHeight/2);
+  const buy=(a==="buyall") ? (()=>{ const n=buyAllCheapest(); if(n>0) renderParty(); return n>0; })   // まとめて強化も長押し連続実行
+                           : (()=> (a==="buyupg") ? buyUpgrade(id) : levelUpGirl(id,1));
+  if(buy()===false) return;                  // 1回目から買えない(資金/最大)なら長押し開始しない
+  holdRingShow(px,py, a==="buyall"?"長押しでまとめ買い":undefined);   // 発動ディレイのサークルタイマー(1秒)
+  _holdInitTimer=setTimeout(()=>{
+    _holdInitTimer=null;
+    if(_holdRingEl){ const r=_holdRingEl; _holdRingEl=null; r.classList.add("burst"); setTimeout(()=>{ if(r.parentNode) r.parentNode.removeChild(r); },220); }
+    _rapidHold=true;
+    blip(900,0.08);                           // 発動音
+    if(state.settings.haptics && navigator.vibrate){ try{navigator.vibrate(24);}catch(e){} }
+    const tick=()=>{
+      // 強化の最大レベルは本当に停止(資金待ちと違い回復しない)
+      if(a==="buyupg"){ const u=UPG_BY_ID[id]; if(u&&u.max!=null&&(state.upgrades[id]||0)>=u.max){ holdStop(); return; } }
+      // 仲間がレベル上限: クラスチェンジを即時実行(レベルアップと同じ連打感)。発動で光る演出
+      if(a==="levelup"){
+        const st=state.girls[id];
+        if(st && (st.level||0)>=LCAP){
+          if(canClassChange(id) && Bg(state.hihiirokane).gte(classChangeCost(id))){
+            if(doClassChange(id)){ _holdCombo=0; classChangeGlow(px,py); }
+            _holdStarved=false;
+          } else {
+            if(!_holdStarved){ _holdStarved=true; holdFx(px,py, canClassChange(id)?"⭐ クラスチェンジ資金待ち…":"Lv.MAX(覚醒ステージ未到達)"); }
+          }
+          return;
+        }
+      }
+      if(buy()===false){                            // 資金不足: 連打状態は維持(資金が戻れば自動再開)
+        if(!_holdStarved){ _holdStarved=true; holdFx(px,py,(_holdCombo>0?"×"+_holdCombo+" ":"")+"資金待ち…"); }
+        return;
+      }
+      _holdStarved=false;
+      _holdCombo++;
+      holdFx(px,py,"×"+_holdCombo+(a==="buyall"?" まとめ買い！":" 連打中！"));
+      if(_holdCombo%5===0) blip(720,0.04);          // 連打音は間引き(耳ざわり防止)
+      if(state.settings.haptics && navigator.vibrate){ try{navigator.vibrate(5);}catch(e){} }
+    };
+    tick();
+    _holdRepeatTimer=setInterval(tick,HOLD_INTERVAL);
+  },HOLD_DELAY);
+}
+function onPanelClick(ev){
+  let el=ev.target;
+  while(el&&el!==dom.panel&&!el.dataset.action) el=el.parentElement;
+  if(!el||!el.dataset.action) return;
+  const a=el.dataset.action, id=el.dataset.id, key=el.dataset.key;
+  unlockAudio();
+  // 強化/レベルアップのポインタ由来clickはpointerdownの長押し系(holdStart)で処理済み → 二重防止。
+  // キーボード操作(ev.detail===0)はここで1回実行してa11yを担保。
+  if((a==="buyupg"||a==="levelup"||a==="buyall") && ev.detail>0) return;
+  if(a==="buyupg"){ buyUpgrade(id); }
+  else if(a==="recruit"){ recruitGirl(id); renderParty(); }
+  else if(a==="levelup"){ levelUpGirl(id,1); }
+  else if(a==="classchange"){ doClassChange(id); renderParty(); }
+  else if(a==="prestige"){ confirmPrestige(); }
+  else if(a==="buyall"){ if(buyAllCheapest()>0){ renderParty(); D.dirtyPanel=true; renderPanel(true); } }
+  else if(a==="toggle"){ toggleSetting(key); }
+  else if(a==="export"){ doExportKey(); }
+  else if(a==="copyexport"){ doCopyExport(); }
+  else if(a==="pasteimport"){ doPasteImport(); }
+  else if(a==="import"){ doImportKey(); }
+  else if(a==="hardreset"){ confirmHardReset(); }
+}
+function toggleSetting(key){
+  state.settings[key]=!state.settings[key];
+  if(key==="motion"){
+    state.settings.motionUserSet=true; // ユーザーが明示変更 → 以後OS設定で上書きしない
+    document.getElementById("app").classList.toggle("no-motion",!state.settings.motion);
+    if(state.settings.motion){ renderBahamutSvg(); }
+  }
+  if(key==="bgm"){ if(state.settings.bgm) startBGM(); else stopBGM(); }
+  if(key==="sound"||key==="bgm") updateSoundBtn();
+  D.saveDirty=true; D.dirtyPanel=true;
+  renderPanel(true);
+  renderParty();
+}
+function switchTab(tab){
+  currentTab=tab;
+  document.querySelectorAll(".tabBtn").forEach(b=>{
+    const sel=b.dataset.tab===tab;
+    b.classList.toggle("active",sel);
+    b.setAttribute("aria-selected",sel?"true":"false");
+  });
+  // tabpanel を現在タブへ関連付け
+  const pnl=dom.panel||document.getElementById("panel");
+  if(pnl) pnl.setAttribute("aria-labelledby","tab-"+tab);
+  D.dirtyPanel=true;
+  renderPanel(true);
+}
+function bindEvents(){
+  const wrap=dom.bossWrap;
+  // 敵味方表示エリア(battle)のどこをタップしてもボスへの攻撃として扱う(空白/仲間/主人公の上でもOK)
+  const battle=document.getElementById("battle")||wrap;
+  battle.addEventListener("pointerdown",tapAttack);
+  wrap.addEventListener("keydown",(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); tapAttack({preventDefault(){},clientX:null}); } });
+  document.getElementById("tabs").addEventListener("click",(e)=>{
+    const b=e.target.closest(".tabBtn"); if(b){ unlockAudio(); switchTab(b.dataset.tab);
+      // 強化ヒントglow消す
+      const g=b.querySelector(".glow"); if(g) g.remove();
+    }
+  });
+  dom.panel.addEventListener("click",onPanelClick);
+  dom.panel.addEventListener("pointerdown",holdStart);   // 強化/レベルアップの長押し連打
+  window.addEventListener("pointerup",holdStop);
+  window.addEventListener("pointercancel",holdStop);
+  dom.panel.addEventListener("keydown",(e)=>{
+    if((e.key==="Enter"||e.key===" ")&&e.target.dataset&&e.target.dataset.action==="toggle"){ e.preventDefault(); toggleSetting(e.target.dataset.key); }
+  });
+  document.getElementById("soundBtn").addEventListener("click",toggleMasterSound);
+  document.addEventListener("visibilitychange",()=>{
+    if(document.hidden){
+      save("force");
+      try{ if(D.audioCtx && D.audioCtx.state==="running") D.audioCtx.suspend(); }catch(e){}   // バックグラウンドでは音声(BGM/SE)を停止
+    } else {
+      D.lastTickAt=nowMs();
+      try{ if(D.audioCtx && D.audioCtx.state==="suspended" && (state.settings.sound||state.settings.bgm)) D.audioCtx.resume(); }catch(e){}  // 復帰で再開
+    }
+  });
+  window.addEventListener("pagehide",()=>save("force"));
+  window.addEventListener("beforeunload",()=>save("force"));
+  // ダブルタップズーム抑制(iOS)
+  let lastTouch=0;
+  document.addEventListener("touchend",(e)=>{ const t=nowMs(); if(t-lastTouch<300){ e.preventDefault(); } lastTouch=t; },{passive:false});
+}
+
+/* =====================================================================
+   モーダル
+   ===================================================================== */
+let _modalLastFocus=null;
+function _modalKeydown(e){
+  const root=document.getElementById("modalRoot");
+  if(!root||!root.classList.contains("show")) return;
+  if(e.key==="Escape"){ e.preventDefault(); hideModal(); return; }
+  if(e.key==="Tab"){
+    const f=root.querySelectorAll('button, [tabindex]:not([tabindex="-1"])');
+    if(f.length===0) return;
+    const first=f[0], last=f[f.length-1];
+    if(e.shiftKey){
+      if(document.activeElement===first||!root.contains(document.activeElement)){ e.preventDefault(); last.focus(); }
+    } else {
+      if(document.activeElement===last||!root.contains(document.activeElement)){ e.preventDefault(); first.focus(); }
+    }
+  }
+}
+function showModal(html){
+  const root=document.getElementById("modalRoot");
+  _modalLastFocus=document.activeElement;
+  root.innerHTML=`<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">${html}</div>`;
+  root.classList.add("show");
+  // 背後のゲームUIを無効化(フォーカス到達/読み上げを遮断)
+  const app=document.getElementById("app");
+  if(app){ try{app.setAttribute("inert","");}catch(e){} app.setAttribute("aria-hidden","true"); }
+  document.addEventListener("keydown",_modalKeydown,true);
+  // 安全側のボタン(やめる=mNo)優先、無ければ最初のボタンへフォーカス
+  const focusTarget=root.querySelector("#mNo")||root.querySelector("button");
+  if(focusTarget) focusTarget.focus();
+}
+function hideModal(){
+  const root=document.getElementById("modalRoot");
+  root.classList.remove("show"); root.innerHTML="";
+  document.removeEventListener("keydown",_modalKeydown,true);
+  const app=document.getElementById("app");
+  if(app){ try{app.removeAttribute("inert");}catch(e){} app.removeAttribute("aria-hidden"); }
+  if(_modalLastFocus&&_modalLastFocus.focus){ try{_modalLastFocus.focus();}catch(e){} }
+  _modalLastFocus=null;
+}
+function confirmPrestige(){
+  const cores=prestigeGain();
+  const nextMult=powB(PRES_FACTOR,((state.prestige.cores||0)+cores)/10);   // 10個で×4(renderPrestigeと同式)
+  showModal(`<h2 id="modalTitle">🐉 転生</h2>
+    <p>到達ステージ ${formatNumber(state.stage.highest)} を捧げ、<br><span class="big">竜核 +${formatNumber(cores)}</span> を授かります。</p>
+    <p>全ての進行はリセットされますが、<br>全ダメージ・全報酬が永久に強化されます。</p>
+    <p>新ボーナス: ×${formatNumber(nextMult)}</p>
+    <div class="modalBtns"><button class="mbtn-ghost" id="mNo">やめる</button><button class="mbtn-primary" id="mYes">転生する</button></div>`);
+  document.getElementById("mNo").onclick=hideModal;
+  document.getElementById("mYes").onclick=()=>{
+    if(doPrestige()){ hideModal(); toast(`転生完了！竜核 +${formatNumber(cores)}（計${formatNumber(state.prestige.cores)}）✨ ×${formatNumber(prestigeMult())}`,{ms:3400}); renderParty(); renderBahamutSvg(); }
+  };
+}
+function confirmHardReset(){
+  showModal(`<h2 id="modalTitle">本当に消す？</h2>
+    <p>すべての進行・仲間・強化・ヒヒイロカネが<br>完全に消去され、最初からになります。<br>この操作は取り消せません。</p>
+    <div class="modalBtns"><button class="mbtn-ghost" id="mNo">やめる</button><button class="mbtn-primary" id="mYes" style="background:linear-gradient(100deg,#F25C7A,#FF8A5B)">全部消す</button></div>`);
+  document.getElementById("mNo").onclick=hideModal;
+  document.getElementById("mYes").onclick=()=>{
+    try{localStorage.removeItem(SAVE_KEY);localStorage.removeItem(SAVE_KEY_BACKUP);}catch(e){}
+    state=newState();
+    setupStage(); recomputeDerived();
+    renderBahamutSvg(); renderParty(); D.dirtyPanel=true; renderPanel(true);
+    hideModal();
+    toast("はじめからになりました。がんばろう！",{ms:2600});
+  };
+}
+// ===== データ引き継ぎ(エクスポート/インポート) =====
+// セーブJSONを "HHK1.<チェックサム>.<base64(UTF-8)>" のキー文字列にしてコピペで持ち運べるようにする。
+// チェックサム(FNV-1a 32bit)でコピペ時の破損・欠落・打ち間違いを検知する。
+function _ckHash(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return (h>>>0).toString(36); }
+function exportSave(){
+  try{ state.lastSeen=nowMs(); const json=safeJSON.stringify(state); if(!json) return null;
+    const b64=btoa(unescape(encodeURIComponent(json)));
+    return "HHK1."+_ckHash(b64)+"."+b64; }catch(e){ return null; }
+}
+function decodeSaveKey(str){
+  if(typeof str!=="string") return {ok:false,err:"キーが空だよ"};
+  const m=str.trim().replace(/\s+/g,"");   // 改行・空白は除去(コピペ対策)
+  const parts=m.split(".");
+  if(parts.length<3||parts[0]!=="HHK1") return {ok:false,err:"キーの形式が違うみたい（HHK1. で始まるよ）"};
+  const chk=parts[1], b64=parts.slice(2).join(".");
+  if(_ckHash(b64)!==chk) return {ok:false,err:"キーが壊れているか一部が欠けているみたい（コピーし直してね）"};   // チェックサム照合
+  let json;
+  try{ json=decodeURIComponent(escape(atob(b64))); }catch(e){ return {ok:false,err:"キーが壊れているみたい"}; }
+  const raw=safeJSON.parse(json);
+  if(!raw||typeof raw!=="object"||!raw.stage||raw.hihiirokane===undefined) return {ok:false,err:"データを読めなかった"};
+  return {ok:true, raw};
+}
+function applyImport(raw){
+  try{
+    const migrated=migrate(raw);
+    try{ const cur=localStorage.getItem(SAVE_KEY); if(cur) localStorage.setItem(SAVE_KEY_BACKUP,cur); }catch(e){}  // 直前データを退避
+    state=migrated;                       // in-memory も差し替え(離脱時保存での巻き戻り防止)
+    setupStage_keepHp(); recomputeDerived();
+    // リロードまで gameTick を停止し、進行中のオートDPSが新stateに適用される(=離脱時保存で前進状態が保存される)のを防ぐ
+    D._noTick=true; D._autoAcc=BIG0; D._autoAt=nowMs();
+    state.lastSeen=nowMs();
+    localStorage.setItem(SAVE_KEY, safeJSON.stringify(state));
+    return true;
+  }catch(e){ return false; }
+}
+function copyText(t){
+  if(navigator.clipboard&&navigator.clipboard.writeText){ return navigator.clipboard.writeText(t).then(()=>true,()=>false); }
+  try{ const ta=document.getElementById("exportKey"); if(ta){ta.focus();ta.select();} const ok=document.execCommand&&document.execCommand("copy"); return Promise.resolve(!!ok); }catch(e){ return Promise.resolve(false); }
+}
+function doExportKey(){
+  const k=exportSave(); const ta=document.getElementById("exportKey");
+  if(!k||!ta){ toast("エクスポートに失敗したよ",{type:"warn"}); return; }
+  ta.value=k; try{ta.focus();ta.select();}catch(e){}
+  copyText(k).then(ok=>toast(ok?"キーを作成してコピーしたよ📋":"キーを作成したよ（コピーを押して保存してね）",{ms:2400}));
+}
+function doCopyExport(){
+  const ta=document.getElementById("exportKey");
+  if(!ta||!ta.value){ toast("先に「キーを作成」を押してね",{type:"info"}); return; }
+  copyText(ta.value).then(ok=>toast(ok?"コピーしたよ📋":"コピーできなかった…長押しで選択してね",{type:ok?undefined:"warn",ms:2200}));
+}
+function doPasteImport(){
+  const ta=document.getElementById("importKey"); if(!ta) return;
+  if(navigator.clipboard&&navigator.clipboard.readText){
+    navigator.clipboard.readText().then(
+      t=>{ if(t&&t.trim()){ ta.value=t.trim(); toast("貼り付けたよ📋 「読み込む」を押してね",{ms:2000}); } else { ta.focus(); toast("クリップボードが空みたい",{type:"info"}); } },
+      ()=>{ ta.focus(); toast("貼り付けできなかった…枠を長押しで貼り付けてね",{type:"warn",ms:2800}); });
+  } else { ta.focus(); toast("枠を長押しで貼り付けてね",{type:"info",ms:2400}); }
+}
+function doImportKey(){
+  const ta=document.getElementById("importKey"); const str=ta?ta.value:"";
+  if(!str||!str.trim()){ toast("キーを貼り付けてね",{type:"warn"}); return; }
+  const chk=decodeSaveKey(str);
+  if(!chk.ok){ toast(chk.err||"キーを読めなかった",{type:"warn"}); return; }
+  const r=chk.raw;
+  const stg=(r.stage&&r.stage.highest)||1;
+  const cores=(r.prestige&&r.prestige.cores)||0;
+  showModal(`<h2 id="modalTitle">📥 データを読み込む？</h2>
+    <p>読み込むデータ:<br><span class="big">到達STAGE ${formatNumber(stg)} ／ 竜核 ${formatNumber(cores)}</span></p>
+    <p>いまのデータは上書きされます。<br>よろしいですか？</p>
+    <div class="modalBtns"><button class="mbtn-ghost" id="mNo">やめる</button><button class="mbtn-primary" id="mYes">読み込む</button></div>`);
+  document.getElementById("mNo").onclick=hideModal;
+  document.getElementById("mYes").onclick=()=>{
+    if(applyImport(chk.raw)){ hideModal(); toast("読み込んだよ！反映のためリロードします✨",{ms:1500}); setTimeout(()=>location.reload(),700); }
+    else { toast("読み込みに失敗したよ",{type:"warn"}); }
+  };
+}
+function showOfflineModal(res){
+  if(Bg(res.goldGained).isZero()) return;
+  const mins=Math.floor(res.elapsedMs/60000);
+  const hrs=Math.floor(mins/60), rm=mins%60;
+  const timeStr=hrs>0?`${hrs}時間${rm}分`:`${mins}分`;
+  const stageLine=(res.stagesGained>0)?`<p>ステージも <span class="big">+${formatNumber(res.stagesGained)}</span> 進んだよ！</p>`:"";
+  const gritLine=(res.gritGained>=0.1)?`<p>🔥 ふんばり <span class="big">+${formatNumber(Math.floor(res.gritGained*10))}</span> 竜核ぶん！</p>`:"";
+  showModal(`<h2 id="modalTitle">おかえりなさい！</h2>
+    <p>${timeStr} のあいだ、仲間たちが<br>バハムートと戦っていたよ。</p>
+    <p>ヒヒイロカネ <span class="big">+${formatNumber(res.goldGained)}</span> 獲得！</p>
+    ${stageLine}
+    ${gritLine}
+    <div class="modalBtns"><button class="mbtn-primary" id="mOk">受け取る✨</button></div>`);
+  document.getElementById("mOk").onclick=()=>{ hideModal(); blip(880,0.15); };
+}
+
+/* =====================================================================
+   オンボーディング
+   ===================================================================== */
+let onboardActive=false, obTapCount=0;
+function _onboardKeydown(e){
+  if(!onboardActive) return;
+  if(e.key==="Escape"){ e.preventDefault(); endOnboard(); }
+}
+function startOnboard(){
+  if(state.onboard.done) return;
+  onboardActive=true; obTapCount=0;
+  const ob=document.getElementById("onboard");
+  ob.setAttribute("role","dialog");
+  ob.setAttribute("aria-modal","true");
+  ob.setAttribute("aria-label","チュートリアル");
+  ob.innerHTML=`<div class="obBubble" style="top:30%;left:50%;transform:translateX(-50%)">
+    <div class="obFinger" aria-hidden="true">👆</div><br>バハムートをタップして攻撃しよう！<br>(3回タップしてね)
+    <br><button class="obSkip" id="obSkip">スキップ</button></div>`;
+  ob.classList.add("show");
+  const skip=document.getElementById("obSkip");
+  skip.onclick=endOnboard;
+  // オーバーレイは pointer-events:none なので、最低限フォーカス+Escapeで脱出可能に
+  if(skip) skip.focus();
+  document.addEventListener("keydown",_onboardKeydown,true);
+}
+function endOnboard(){
+  onboardActive=false;
+  state.onboard.tapDone=true; state.onboard.done=true;
+  const ob=document.getElementById("onboard");
+  ob.classList.remove("show"); ob.innerHTML="";
+  ob.removeAttribute("role"); ob.removeAttribute("aria-modal"); ob.removeAttribute("aria-label");
+  document.removeEventListener("keydown",_onboardKeydown,true);
+  D.saveDirty=true;
+}
+function checkRecruitHint(){
+  if(state.onboard.recruitHinted) return;
+  if(state.stage.highest>=RECRUIT_STAGE[0] && Bg(state.hihiirokane).gte(GIRLS[0].recruit)){
+    state.onboard.recruitHinted=true;
+    toast("仲間を呼ぼう！『仲間』タブのさくらんが自動で戦ってくれるよ🌸",{ms:3600});
+    const tabBtn=document.querySelector('.tabBtn[data-tab="girls"]');
+    if(tabBtn && !tabBtn.querySelector(".glow")){ const g=document.createElement("span");g.className="glow";tabBtn.appendChild(g); }
+  }
+}
+
+/* =====================================================================
+   B14  VERIFY — バランス検証用の早送りAPI(CDPハーネス verify/ から駆動)
+   実ロジック(gameTick/dealDamage/buyAllCheapest/doPrestige)をそのまま使い、
+   仮想クロック _ffNow でゲーム内時間だけを高速に進める(描画rAFは同期実行中
+   に走らないので演出コストゼロ)。実行中は _ffQuiet で演出/保存をミュート。
+   手動実行の事故に備え、開始時に現セーブを SAVE_KEY+"_ffbak" へ退避する。
+   時計を実時間へ戻すには __game.ffReset()(またはリロード)。
+   ===================================================================== */
+function _ffL10(x){ const v=Bg(x); return v.isZero()? -1 : v.log10(); }   // JSON安全なlog10(0→-1)
+function ffSnapshot(){
+  const g={}; for(const id in state.girls){ const x=state.girls[id]||{}; g[id]={lv:x.level||0, tier:x.tier||0, owned:!!x.owned}; }
+  return {
+    stage:state.stage.index, highest:state.stage.highest, best:state.stats.bestStage||0,
+    cores:state.prestige.cores||0, presCount:state.prestige.count||0,
+    hihiL:_ffL10(state.hihiirokane), earnedL:_ffL10(state.totalEarned), lifeL:_ffL10(prestigeLifeIfNow()),
+    dpsL:_ffL10(D.dps), tapL:_ffL10(D.tapDmg),
+    kills:state.stats.bahamutDefeated, taps:state.stats.totalTaps,
+    upg:Object.assign({},state.upgrades), girls:g,
+  };
+}
+let _ffBackedUp=false;
+// ffRun(仮想秒, {tapsPerSec, buyEveryMs, autoSuper, prestigeWallSec, snapEverySec})
+//  tapsPerSec: 手動連打の想定レート(0=放置) / buyEveryMs: まとめて強化の実行間隔(0=買わない)
+//  autoSuper: ゲージ満タンで必殺を自動発動(既定true) / prestigeWallSec: stageがこの秒数上がらず転生可能なら転生(0=しない)
+//  戻り値 {snaps:[…], events:[…], final:…}(大数はlog10で返す)
+function ffRun(seconds,opts){
+  opts=opts||{};
+  const tps=+opts.tapsPerSec||0;
+  const buyMs=("buyEveryMs" in opts)?+opts.buyEveryMs:1000;
+  const autoSuper=opts.autoSuper!==false;
+  const wallSec=+opts.prestigeWallSec||0;
+  const snapMs=Math.max(1,(+opts.snapEverySec||60))*1000;
+  if(!_ffBackedUp){ try{ const cur=localStorage.getItem(SAVE_KEY); if(cur) localStorage.setItem(SAVE_KEY+"_ffbak",cur); }catch(e){} _ffBackedUp=true; }
+  const keepSet=Object.assign({},state.settings);
+  Object.assign(state.settings,{sound:false,bgm:false,motion:false,damageNumbers:false,haptics:false});
+  _ffQuiet=true;
+  if(!_ffNow) _ffNow=Date.now();
+  D.lastTickAt=_ffNow; D._autoAt=_ffNow;
+  const t0=_ffNow, snaps=[], events=[];
+  let tapAcc=0, buyAcc=0, snapAcc=0;
+  let lastUpT=_ffNow, lastUpS=state.stage.index;
+  const steps=Math.max(1,Math.round(seconds*1000/TICK_MS));
+  for(let i=0;i<steps;i++){
+    _ffNow+=TICK_MS;
+    if(tps>0){
+      tapAcc+=tps*TICK_MS/1000;
+      while(tapAcc>=1){
+        tapAcc-=1;
+        state.stats.totalTaps++;
+        tapStrike(_ffNow);   // 実プレイと同じ挙動(快進撃中は繰り越し多重撃破)
+        addSuperCharge(1);
+        if(autoSuper&&superReady()) fireSuper();
+      }
+    }
+    gameTick();
+    if(buyMs>0){ buyAcc+=TICK_MS; if(buyAcc>=buyMs){ buyAcc=0; buyAllCheapest(); } }
+    if(state.stage.index>lastUpS){ lastUpS=state.stage.index; lastUpT=_ffNow; }
+    else if(wallSec>0 && (_ffNow-lastUpT)/1000>=wallSec && canPrestige()){
+      const c0=state.prestige.cores||0;
+      if(doPrestige()){
+        events.push({t:(_ffNow-t0)/1000, ev:"prestige", cores:state.prestige.cores, gained:state.prestige.cores-c0, atStage:lastUpS});
+        lastUpS=state.stage.index; lastUpT=_ffNow;
+      }
+    }
+    snapAcc+=TICK_MS;
+    if(snapAcc>=snapMs){ snapAcc=0; const s=ffSnapshot(); s.t=(_ffNow-t0)/1000; snaps.push(s); }
+  }
+  const fin=ffSnapshot(); fin.t=(_ffNow-t0)/1000;
+  Object.assign(state.settings,keepSet);
+  _ffQuiet=false;
+  D.saveDirty=false;   // 早送り結果を自動保存させない
+  return {snaps:snaps, events:events, final:fin};
+}
+function ffReset(){ _ffNow=0; D.lastTickAt=Date.now(); D._autoAt=Date.now(); }
+
+/* =====================================================================
+   B10  BOOT
+   ===================================================================== */
+function buildBgStars(){
+  const wrap=document.getElementById("bgStars");
+  let html="";
+  for(let i=0;i<10;i++){
+    const x=Math.random()*100, y=Math.random()*100, s=4+Math.random()*8;
+    const d=(Math.random()*4).toFixed(2);
+    const star=Math.random()<0.6;
+    html+=`<div class="bgstar" style="left:${x}%;top:${y}%;animation-delay:${d}s">`+
+      (star?`<svg width="${s}" height="${s}" viewBox="0 0 10 10"><polygon points="5,0 6,4 10,5 6,6 5,10 4,6 0,5 4,4" fill="#FFD98A"/></svg>`
+           :`<svg width="${s*0.7}" height="${s*0.7}" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="#C9A7F0" opacity=".6"/></svg>`)+
+      `</div>`;
+  }
+  wrap.innerHTML=html;
+}
+function init(){
+  cacheDom();
+  buildBgStars();
+  // reduced-motion(OS設定はユーザーが明示変更していない場合のみ既定へ反映)
+  let rmMql=null, rm=false;
+  try{ rmMql=window.matchMedia&&window.matchMedia("(prefers-reduced-motion:reduce)"); rm=rmMql&&rmMql.matches; }catch(e){}
+  state=load();
+  // 大数フィールドを Big に統一(新規ゲームの newState は Number 0 のため)
+  state.hihiirokane=toBig(state.hihiirokane); state.totalEarned=toBig(state.totalEarned);
+  if(state.prestige) state.prestige.lifeEarned=toBig(state.prestige.lifeEarned);
+  if(rm && !state.settings.motionUserSet) state.settings.motion=false;
+  document.getElementById("app").classList.toggle("no-motion",!state.settings.motion);
+  // OS設定のライブ変更へ追従(ユーザー明示設定済みなら追従しない)
+  if(rmMql){
+    const onRm=(e)=>{
+      if(state.settings.motionUserSet) return;
+      state.settings.motion=!e.matches;
+      document.getElementById("app").classList.toggle("no-motion",!state.settings.motion);
+      if(state.settings.motion) renderBahamutSvg();
+      D.dirtyPanel=true; renderPanel(true); renderParty();
+    };
+    try{ rmMql.addEventListener("change",onRm); }catch(e){ try{ rmMql.addListener(onRm); }catch(e2){} }
+  }
+  // 整合性: maxHp再計算
+  setupStage_keepHp();
+  recomputeDerived();
+  // オフライン進行
+  const res=applyOfflineProgress(nowMs());
+  bindEvents();
+  buildSuperBar();
+  renderBahamutSvg();
+  renderParty();
+  renderPlayer();
+  D.dirtyHUD=true; D.dirtyPanel=true;
+  renderHUD(); renderSuper(); renderPanel(true);
+  updateSoundBtn();   // タイトルバーの音ON/OFFアイコンを現在設定に同期
+  showCutin();   // リロード時も毎回、現ステージの名乗りカットインを表示(音声は解錠後のみ鳴る)
+  // ループ開始
+  D.lastTickAt=nowMs();
+  setInterval(gameTick,TICK_MS);
+  setInterval(()=>{ if(D.saveDirty) save("auto"); },AUTOSAVE_MS);
+  requestAnimationFrame(renderLoop);
+  // オフラインモーダル
+  if(!Bg(res.goldGained).isZero()){ setTimeout(()=>showOfflineModal(res),400); }
+  // オンボーディング(初回)
+  if(!state.onboard.done){ setTimeout(startOnboard,500); }
+  // 公開版の更新検知(キャッシュ対策): 起動時＋復帰時にチェック
+  checkForUpdate();
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkForUpdate(); });
+  window.addEventListener("focus",checkForUpdate);
+  // デバッグ/検証用(verify/ のCDPハーネスが使用)。state はゲッターにして doPrestige 後の陳腐化を防ぐ
+  window.__game={D,save,recomputeDerived,doPrestige,buyAllCheapest,canPrestige,prestigeGain,
+    ff:ffRun, ffReset,
+    applyOffline:(sec)=>{ state.lastSeen=nowMs()-sec*1000; return applyOfflineProgress(nowMs()); },   // 検証用: 疑似オフライン進行
+
+    fx:{bahamutHp,rewardFor,costOf,classChangeCost,girlDps,coresFromLife,prestigeMult,computeDPS,computeTapDamage,Bg},
+    data:()=>({
+      GIRLS:GIRLS.map(g=>({id:g.id,name:g.name,recruit:g.recruit,baseDps:g.baseDps,lvBase:g.lvBase})),
+      UPGRADES:UPGRADES.map(u=>({id:u.id,baseCost:u.baseCost,growth:u.growth,max:u.max})),
+      RECRUIT_STAGE,CC_BASE,CC_STAGE,CC_STEP,CC_GROWTH,LCAP,NCLASS,DPS_SLOPE,CLASSMULT,COST_C1,COST_C2,
+      PRES_LOG0,PRES_FACTOR,TICK_MS,AUTO_DMG_MS,TAP_DPS_FRACTION,AUTO_PARTY_FRACTION,
+      SUPER_TAP_HITS,SUPER_DPS_SECONDS,OFFLINE_CAP_MS,VERSION})};
+  Object.defineProperty(window.__game,"state",{get:()=>state});
+}
+// 公開時に publish.ps1 が BUILD をスタンプし version.txt も同値で出力する。実行中のBUILDと
+// 最新 version.txt が食い違えば古いキャッシュ → 保存してから一度だけ自動リロードして最新版へ。
+let _updChecking=false;
+function checkForUpdate(){
+  if(BUILD==="dev" || _updChecking) return;   // ローカル開発・多重実行はスキップ
+  _updChecking=true;
+  fetch("version.txt?_="+nowMs(), {cache:"no-store"})
+    .then(r=> r.ok ? r.text() : null)
+    .then(v=>{
+      _updChecking=false;
+      if(!v) return;
+      v=v.trim();
+      if(!v || v===BUILD) return;
+      let last=null; try{ last=sessionStorage.getItem("hhk_upd"); }catch(e){}
+      if(last===v) return;   // 同じ新版へ再リロードしない(無限ループ防止)
+      try{ sessionStorage.setItem("hhk_upd", v); }catch(e){}
+      try{ save("force"); }catch(e){}
+      try{ toast("新しいバージョンに更新するよ✨",{ms:1200}); }catch(e){}
+      setTimeout(()=>location.reload(), 350);
+    })
+    .catch(()=>{ _updChecking=false; });
+}
+// ロード済みstateのHPを尊重しつつmaxHpを式から再導出
+function setupStage_keepHp(){
+  const s=state.stage.index;
+  state.bahamut.isBoss=isBossStage(s);
+  const mh=bahamutHp(s);
+  state.bahamut.maxHp=mh;
+  state.bahamut.tier=Math.floor((s-1)/5);
+  // 保存HPがmaxを超える/不正ならmaxに
+  let hp=Bg(state.bahamut.hp);
+  if(hp.isZero()||hp.gt(mh)) hp=mh;
+  state.bahamut.hp=hp;
+}
+
+if(document.readyState==="loading"){
+  document.addEventListener("DOMContentLoaded",init);
+} else { init(); }
+})();
+</script>
+</body>
+</html>
