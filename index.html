@@ -600,7 +600,7 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 const SAVE_KEY="hihiiro_clicker_save_v1";
 const SAVE_KEY_BACKUP="hihiiro_clicker_save_v1_bak";
 const VERSION=8;
-const BUILD="820275db1d91";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
+const BUILD="ba7170be519b";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
 const AUTOSAVE_MS=10000;
 const SAVE_MIN_GAP_MS=2000;
 const TICK_MS=100;
@@ -661,6 +661,11 @@ const PRES_LOG0=5, PRES_FACTOR=4;   // LOG0=5: 初コア=生涯獲得10^5.1(≈s
 function prestigeMult(){ return powB(PRES_FACTOR,(((state.prestige&&state.prestige.cores)||0))/10); }   // Big(×4^(cores/10), 無制限)
 // 生涯獲得ヒヒ(転生をまたいで累積)から得られる総コア(1桁=10個)
 function coresFromLife(life){ const L=(life instanceof Big)?life.log10():(life>0?Math.log10(life):-Infinity); return (isFinite(L)&&L>PRES_LOG0)?Math.floor((L-PRES_LOG0)*10):0; }
+// ふんばり1桁(180秒 or タップ90回ぶん)の価値: +10コア or 現在コアの+0.5% の大きい方(比例制)。
+// 深層では「壁で戦う」が転生サイクル(×1.29/周)と互角以上になる: 5連打の壁張り付き=×1.76/40分、放置=×1.07/40分。
+// コア2,000未満(≈序盤)は従来の+10固定と同じ。転生でふんばりはリセットされるので run 内は線形(暴走しない)。
+const GRIT_CORES_RATE=0.005;
+function gritCoresPerDecade(){ return Math.max(10, Math.round(((state.prestige&&state.prestige.cores)||0)*GRIT_CORES_RATE)); }
 const CLASS_TITLES={
   sakura_kenshi:["先鋒剣士","桜花剣聖","緋天剣神","千桜の極","天斬・絶"],
   runaria_mahou:["範囲術師","月詠大魔女","星海の賢者","虚空術皇","万象・理"],
@@ -998,7 +1003,7 @@ function applyOfflineProgress(now){
   setupStage_keepHp();
   const gritGain=(nzSec>0&&Number.isFinite(nzSec))?nzSec/180:0;
   if(!gold.isZero()){ state.hihiirokane=Bg(state.hihiirokane).add(gold); state.stats.totalEarnedAll=Bg(state.stats.totalEarnedAll||0).add(gold); }
-  if(!credit.isZero()) state.totalEarned=Bg(state.totalEarned).add(credit.mul(powB(10,grit0+gritGain)));   // ふんばり込みで竜核のもとへ(オンライン同様、稼いだふんばりが乗る。支配的な壁際の報酬は終了時点のふんばりで得るため終値を使用)
+  if(!credit.isZero()) state.totalEarned=Bg(state.totalEarned).add(credit.mul(powB(10,(grit0+gritGain)*gritCoresPerDecade()/10)));   // ふんばり込みで竜核のもとへ(オンライン同様、稼いだふんばりが乗る。支配的な壁際の報酬は終了時点のふんばりで得るため終値を使用)
   if(gritGain>0) state.prestige.grit=grit0+gritGain;
   if(kills>0){ state.stats.bahamutDefeated+=kills; recomputeDerived(); } // 累計撃破もオンラインと同様に加算+報酬式(goldGain/prestige連動)・DPS再計算
   if(!gold.isZero()||kills>0){ D.dirtyHUD=true; D.dirtyPanel=true; D.saveDirty=true; }
@@ -1092,7 +1097,7 @@ function onBahamutDefeated(){
   state.hihiirokane=Bg(state.hihiirokane).add(reward);          // 所持ヒヒ(使える金)は常に付与
   state.stats.totalEarnedAll=Bg(state.stats.totalEarnedAll||0).add(reward);   // 本当の総獲得(記録タブ用): 登り直し分も含めて常に加算
   if(s>(state.stats.bestStage||0)){                             // 過去最高stage超え=新規ゾーンのみ総獲得(コアの元)に加算。既踏破の再取得ではコアが増えない(再到達→転生でのコア膨張対策)
-    state.totalEarned=Bg(state.totalEarned).add(reward.mul(powB(10,state.prestige.grit||0)));   // ふんばり(粘った時間)ぶん竜核のもとが大きくなる(所持ヒヒには乗らない)
+    state.totalEarned=Bg(state.totalEarned).add(reward.mul(powB(10,(state.prestige.grit||0)*gritCoresPerDecade()/10)));   // ふんばり(粘った時間×比例価値)ぶん竜核のもとが大きくなる(所持ヒヒには乗らない)
     state.stats.bestStage=s;
   }
   state.stats.bahamutDefeated++;
@@ -2154,7 +2159,7 @@ function renderPrestige(p){
   const can=canPrestige();
   const cores=prestigeGain();
   const nextMult=powB(PRES_FACTOR,((state.prestige.cores||0)+cores)/10);
-  const gritN=Math.floor((state.prestige.grit||0)*10);   // ふんばり=180秒で竜核10個ぶん(1桁)
+  const gritN=Math.floor((state.prestige.grit||0)*gritCoresPerDecade());   // ふんばり=1桁あたり max(10, コアの0.5%) 個ぶん(比例制)
   let html=`<div class="panelHead">🐉 転生(竜核を捧げる) — 全進行をリセットし永久に強化</div>`;
   html+=`<div class="card" style="flex-direction:column;align-items:stretch;gap:6px">
     <div class="cardEff" style="font-size:13px">現在の転生ボーナス: 全ダメージ・全報酬 ×${formatNumber(prestigeMult())}</div>
@@ -2308,8 +2313,11 @@ function gameTick(){
   if(dt>1.5) dt=1.5; // 大きなギャップは上限(バックグラウンド復帰など)
   state.stats.playTimeMs+=dt*1000;
   // ふんばりボーナス: 新規ゾーン(通算bestより先)で戦っている時間を蓄積(180秒=1桁)。
-  // 倒した時に竜核のもと(totalEarned)へ×10^gritで反映=「倒すのに時間がかかるほど、倒した瞬間の竜核が大きい」
+  // 倒した時に竜核のもと(totalEarned)へ×10^(grit×比例価値)で反映=「倒すのに時間がかかるほど、倒した瞬間の竜核が大きい」
   if(state.stage.index>(state.stats.bestStage||0)) state.prestige.grit=(state.prestige.grit||0)+dt/180;
+  // 必殺ゲージの自動チャージ: 2秒ごとに+1(タップなしでも約60秒で満タン。連打なら従来どおり約6秒)
+  D._superAcc=(D._superAcc||0)+dt;
+  if(D._superAcc>=2){ const n=Math.floor(D._superAcc/2); D._superAcc-=n*2; if(!superReady()) addSuperCharge(n); }
   // DPS適用: 仲間の攻撃を定周期で実HPへ適用。HPへは平均DPS(owed)をそのまま入れる。
   // (会心は computeDPS の critFactor に既に内包済み。ここで通常/会心に割ると高critDamage建てで
   //  通常ヒットが owed/cf まで小さくなり、巨大HPに対し桁落ち=ほぼ無反応・表示も小桁で「減らない」ように見える)
