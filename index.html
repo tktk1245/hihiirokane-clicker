@@ -600,7 +600,7 @@ button:focus-visible{outline:3px solid var(--lav);outline-offset:2px;border-radi
 const SAVE_KEY="hihiiro_clicker_save_v1";
 const SAVE_KEY_BACKUP="hihiiro_clicker_save_v1_bak";
 const VERSION=8;
-const BUILD="7667c17e72d3";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
+const BUILD="3af9bfd95d93";   // 公開時に publish.ps1 が index.html のハッシュへ置換(version.txtと同値=キャッシュ更新検知用)
 const AUTOSAVE_MS=10000;
 const SAVE_MIN_GAP_MS=2000;
 const TICK_MS=100;
@@ -987,7 +987,7 @@ function applyOfflineProgress(now){
     // 2体目以降(stage a〜)を二分探索: 予算内で倒せる最大数(撃破数上限quotaの範囲で)
     const a=startStage+1;
     let lo=0, hi=Math.max(0,quota-1);
-    while(lo<hi){ const mid=(lo+hi+1)>>1; if(hpSumB(a,mid).lte(budget)) lo=mid; else hi=mid-1; }
+    while(lo<hi){ const mid=Math.floor((lo+hi+1)/2); if(hpSumB(a,mid).lte(budget)) lo=mid; else hi=mid-1; }   // >>1はNG(2^31超で負数化→無限ループ)
     const k=lo;
     if(k>0){
       gold=gold.add(rewardSumB(a,k));
@@ -2040,13 +2040,8 @@ function fireSuper(){
   const cr=getCrit();
   const dmg=Bg(D.tapDmg).mul(cr.mult*SUPER_TAP_HITS).add(Bg(D.dps).mul(SUPER_DPS_SECONDS));   // Big
   const ctr=rectCenter();
-  // 余剰ダメージは gameTick 同様に繰り越して複数撃破
-  let rem=dmg, kills=0; const MAX=rushKillBase();   // 必殺の繰り越し上限も登り直しスケールに追従
-  while(!rem.isZero() && kills<MAX){
-    const hp=state.bahamut.hp;
-    if(rem.gte(hp)){ rem=rem.sub(hp); _burstKill=(kills+1<MAX)&&rem.gte(bahamutHp(state.stage.index+1)); dealDamage(hp,{source:"super",silent:true}); _burstKill=false; kills++; }
-    else { dealDamage(rem,{source:"super",silent:true}); rem=BIG0; }
-  }
+  // 余剰ダメージは gameTick 同様に繰り越して複数撃破(深層は一括処理)
+  const kills=burstKills(dmg,rushKillBase(),"super");
   rushMark(kills,nowMs());   // 必殺の多重撃破も快進撃演出の対象
   // 演出: ズバシャーン
   if(state.settings.damageNumbers) spawnDamageNumber(dmg,ctr.x,ctr.y-10,true,false,true);
@@ -2323,6 +2318,54 @@ function updateRushFx(){
     _rushHudEl.querySelector(".rate").textContent=rate+"・通算最高まで "+p.toFixed(0)+"%";
   } else { bar.style.display="none"; _rushHudEl.querySelector(".rate").textContent=rate; }
 }
+// ===== 深層スケーリング: 連続撃破の一括処理 =====
+// 1バーストの最初のBURST_LOOP_MAX体は従来どおり1体ずつ(演出・履歴・経済が完全に通常どおり)。
+// 超過分(深層の登り直し等)は等比和の閉形式でまとめて処理=どんな深度でも1tickがO(log)。
+// (bestが数十億級だと1体ずつでは1tickに数百万ループ=進行不能になるため。issues.md 2026-07-07 対応)
+const BURST_LOOP_MAX=200;
+function bulkAdvance(budget,maxKills){   // 現ステージ(満タン前提)から budget(Big)/maxKills 内で一括撃破 → {kills, rem}
+  const s=state.stage.index;
+  let lo=0, hi=Math.max(0,Math.floor(maxKills));
+  while(lo<hi){ const mid=Math.floor((lo+hi+1)/2); if(hpSumB(s,mid).lte(budget)) lo=mid; else hi=mid-1; }
+  const k=lo;
+  if(k<=0) return {kills:0, rem:budget};
+  const gold=rewardSumB(s,k);
+  state.hihiirokane=Bg(state.hihiirokane).add(gold);
+  state.stats.totalEarnedAll=Bg(state.stats.totalEarnedAll||0).add(gold);
+  const best0=state.stats.bestStage||0, cf=Math.max(s,best0+1), ce=s+k-1;
+  if(ce>=cf) state.totalEarned=Bg(state.totalEarned).add(rewardSumB(cf,ce-cf+1).mul(powB(10,(state.prestige.grit||0)*gritCoresPerDecade()/10)));   // 新規ゾーンのみコアの元(ふんばり込み)
+  if(ce>best0) state.stats.bestStage=ce;
+  state.stats.bahamutDefeated+=k;
+  const rec=state.stats.recentKills||(state.stats.recentKills=[]);   // 討伐履歴は最後の1体を代表で記録
+  rec.unshift({s:ce, tier:Math.floor((ce-1)/5), r:rewardFor(ce), boss:ce%5===0, t:Date.now()});
+  if(rec.length>30) rec.length=30;
+  const rem=budget.sub(hpSumB(s,k));
+  state.stage.index=s+k;
+  if(state.stage.index>state.stage.highest) state.stage.highest=state.stage.index;
+  setupStage();   // 新ステージを満タンで設定(isBoss/tier/HP)
+  D.dirtyBoss=true; D.dirtyHUD=true; D.saveDirty=true;
+  return {kills:k, rem:rem};
+}
+// 繰り越しダメージでの連続撃破(自動DPS/タップ/必殺で共用)
+function burstKills(dmg,maxK,source){
+  let kills=0;
+  while(!dmg.isZero() && kills<maxK){
+    if(kills>=BURST_LOOP_MAX){
+      const r=bulkAdvance(dmg,maxK-kills);
+      kills+=r.kills; dmg=r.rem;
+      if(r.kills===0){ if(!dmg.isZero()){ dealDamage(dmg,{source:source,silent:true}); dmg=BIG0; } break; }
+      continue;
+    }
+    const hp=state.bahamut.hp;
+    if(dmg.gte(hp)){
+      dmg=dmg.sub(hp);
+      _burstKill=(kills+1<maxK)&&dmg.gte(bahamutHp(state.stage.index+1));   // 次ステージHPで予測(壁到達の最後の1体を履歴に残す)
+      dealDamage(hp,{source:source,silent:true});
+      _burstKill=false; kills++;
+    } else { dealDamage(dmg,{source:source,silent:true}); dmg=BIG0; }
+  }
+  return kills;
+}
 function gameTick(){
   if(D._noTick) return;   // インポート直後〜リロードまでは進行を止める(進行中の前進が新stateに適用されるのを防ぐ)
   const t=nowMs();
@@ -2351,17 +2394,7 @@ function gameTick(){
       if(state.settings.damageNumbers) spawnDamageNumber(dmg,null,null,isCrit,true);     // auto=true: 非会心=小シアン / 会心=控えめゴールド「会心」
       if(state.settings.motion) spawnHitSpark(null,null,false);                          // 粒子は通常量(タップ会心より控えめ)
       // 1tickのキル上限は基本400。連打中はタップ回数/秒に応じて上限が増える(快進撃を連打で加速)
-      let kills=0; const MAXK=rushKillCap(t);
-      while(!dmg.isZero() && kills<MAXK){
-        const hp=state.bahamut.hp;
-        if(dmg.gte(hp)){
-          dmg=dmg.sub(hp);
-          const willKillAgain=(kills+1<MAXK)&&dmg.gte(bahamutHp(state.stage.index+1));   // 次ステージのHPで予測(現HP基準だと壁到達の最後の1体が討伐履歴に残らない)
-          _burstKill=willKillAgain;
-          dealDamage(hp,{source:"dps",silent:true});
-          _burstKill=false; kills++;
-        } else { dealDamage(dmg,{source:"dps",silent:true}); dmg=BIG0; }
-      }
+      const kills=burstKills(dmg,rushKillCap(t),"dps");
       rushMark(kills,t);   // 多重撃破が続く間は快進撃演出(見た目のみ)
     }
     // たまに攻撃モーション
@@ -2499,12 +2532,7 @@ function tapStrike(_now){
     const cr=getCrit(); const isCrit=Math.random()<cr.chance;
     let rem=Bg(D.tapDmg); if(isCrit){ rem=rem.mul(cr.mult); state.stats.totalCrits++; }
     const shown=rem;
-    let kills=0; const MAXK=rushKillBase();   // 1タップの繰り越し上限=自動1回ぶんの基本値(√bestスケール)
-    while(!rem.isZero() && kills<MAXK){
-      const hp=state.bahamut.hp;
-      if(rem.gte(hp)){ rem=rem.sub(hp); _burstKill=(kills+1<MAXK)&&rem.gte(bahamutHp(state.stage.index+1)); dealDamage(hp,{source:"tap-rush",silent:true}); _burstKill=false; kills++; }
-      else { dealDamage(rem,{source:"tap-rush",silent:true}); rem=BIG0; }
-    }
+    const kills=burstKills(rem,rushKillBase(),"tap-rush");   // 1タップの繰り越し上限=自動1回ぶんの基本値(√bestスケール、深層は一括処理)
     rushMark(kills,_now);
     // 演出はタップ1回ぶんに集約(会心はdealDamageでなくここで判定済み)
     if(state.settings.damageNumbers) spawnDamageNumber(shown,null,null,isCrit);
